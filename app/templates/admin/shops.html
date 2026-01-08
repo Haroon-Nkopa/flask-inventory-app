@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Admin | Register Shops</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <!-- Bootstrap 5 -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+
+  <style>
+    body {
+      background: linear-gradient(180deg, #0b1220 0%, #121a2e 100%);
+      color: #f5f5f5;
+      font-family: 'Inter', sans-serif;
+      min-height: 100vh;
+    }
+    .container {
+      max-width: 900px;
+      margin-top: 60px;
+    }
+    .card {
+      background: #10192c;
+      border: none;
+      border-radius: 12px;
+      box-shadow: 0 0 25px rgba(0, 0, 0, 0.4);
+    }
+    .form-control {
+      background-color: #1b2437;
+      border: none;
+      color: #fff;
+    }
+    .form-control:focus {
+      background-color: #1b2437;
+      color: #fff;
+      box-shadow: 0 0 0 2px #6c63ff;
+    }
+    .btn-primary {
+      background-color: #6c63ff;
+      border: none;
+    }
+    .btn-primary:hover {
+      background-color: #5848ff;
+    }
+    .shop-list li {
+      background: #1b2437;
+      border: 1px solid #2a3550;
+      padding: 10px 15px;
+      border-radius: 8px;
+      margin-bottom: 8px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      transition: all 0.2s ease;
+    }
+    .shop-list li:hover {
+      background: #202c47;
+      transform: translateY(-2px);
+    }
+    .logout {
+      position: absolute;
+      top: 20px;
+      right: 30px;
+      color: #aaa;
+      text-decoration: none;
+      font-size: 0.9rem;
+    }
+    .logout:hover {
+      color: #fff;
+    }
+  </style>
+</head>
+<body>
+
+    <!-- ✅ ADD USER BUTTON -->
+      <div class="d-flex justify-content-start mb-4 ps-2">
+        <a href="{{ url_for('admin.add_user_to_shop') }}" class="btn btn-outline-light">
+          ➕ Add New User
+        </a>
+      </div>
+
+
+  <a href="{{ url_for('auth.admin_login') }}" class="logout">Logout</a>
+
+  <div class="container">
+    <div class="card p-4">
+      <h2 class="text-center mb-4">🛍️ Register New Shop</h2>
+
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          {% for category, message in messages %}
+            <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+              {{ message }}
+              <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+          {% endfor %}
+        {% endif %}
+      {% endwith %}
+
+      <form method="POST" class="mb-4">
+        <div class="input-group">
+          <input type="text" name="name" class="form-control" placeholder="Enter shop name..." required>
+          <button type="submit" class="btn btn-primary">Register</button>
+        </div>
+      </form>
+
+
+      <h4 class="mb-3">📋 Registered Shops</h4>
+      {% if shops %}
+        <ul class="shop-list list-unstyled">
+          {% for shop in shops %}
+            <li>
+              <span><strong>{{ shop.name }}</strong></span>
+              <span class="text-muted small">Products: {{ shop.products|length }}</span>
+            </li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <p class="text-muted text-center">No shops registered yet.</p>
+      {% endif %}
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

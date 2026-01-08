@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Inventory Dashboard</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body class="bg-dark text-light">
+  <div class="container mt-5">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+      <h2>📦 Inventory Dashboard</h2>
+      <a href="{{ url_for('main.add_product') }}" class="btn btn-success">+ Add Product</a>
+      <a href="{{ url_for('main.stock_history') }}" class="btn btn-info">📊 View Stock History</a>
+      <a href="{{ url_for('main.take_stock') }}" class="btn btn-primary ms-2">📋 Take Stock</a>
+      <a href="{{ url_for('main.new_stocks') }}" class="btn btn-secondary">New Stocks</a>  
+      <div style="display: flex; justify-content: space-between; align-items: center; background: #0b1220; color: white; padding: 10px 20px; border-radius: 8px; margin-bottom: 20px;">
+    <h3 style="margin: 0;">🛍️ {{ session.get(session["shop_id"], session["shop_name"]) }}</h3>
+        <a href="{{ url_for('main.logout') }}" class="btn btn-sm btn-danger" style="background: #dc3545; color: white; padding: 6px 12px; border-radius: 6px; text-decoration: none;">Logout</a>
+    </div>
+
+    </div>
+
+        <!-- ✅ Flash messages -->
+  <div class="container mt-3">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for category, message in messages %}
+          <div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible fade show" role="alert">
+            {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+          </div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+  </div>   
+
+    <table class="table table-dark table-striped table-hover text-center align-middle">
+      <thead class="table-success text-dark">
+        <tr>
+          <th>ID</th>
+          <th>Name</th>
+          <th>Category</th>
+          <th>Price (R)</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in products %}
+        <tr>
+          <td>{{ p.id }}</td>
+          <td>{{ p.name }}</td>
+          <td>{{ p.category }}</td>
+          <td>{{ "%.2f"|format(p.price) }}</td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="5">No products found.</td>
+        </tr>
+        {% endfor %}
+      </tbody>0
+    </table>
+
+    <div class="d-flex justify-content-end mt-3">
+      <a href="{{ url_for('main.summary') }}" class="btn btn-primary">📊 Summary</a>
+    </div>
+
+  </div>
+</body>
+</html>
