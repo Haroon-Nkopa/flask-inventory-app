@@ -7,22 +7,22 @@
 </head>
 <body class="bg-dark text-light">
   {% if session.get('shop_name') %}
-  <div style="
-    background-color: #007bff; 
-    color: white; 
-    text-align: center; 
-    padding: 12px; 
-    font-size: 1.1rem; 
-    font-weight: bold;
-    letter-spacing: 0.5px;
-    border-radius: 4px;
-    margin-bottom: 15px;
-  ">
-    🏪 {{ session.get('shop_name') }}
-  </div>
-{% endif %}
+    <div style="
+      background-color: #007bff; 
+      color: white; 
+      text-align: center; 
+      padding: 12px; 
+      font-size: 1.1rem; 
+      font-weight: bold;
+      letter-spacing: 0.5px;
+      border-radius: 4px;
+      margin-bottom: 15px;
+    ">
+      🏪 {{ session.get('shop_name') }}
+    </div>
+  {% endif %}
 
-<!-- ✅ Flash messages -->
+  <!-- ✅ Flash messages -->
   <div class="container mt-3">
     {% with messages = get_flashed_messages(with_categories=true) %}
       {% if messages %}
@@ -43,26 +43,76 @@
       </div>
       <div class="card-body">
         <form action="{{ url_for('main.add_product') }}" method="POST">
+
+          <!-- Product Name -->
           <div class="mb-3">
             <label for="name" class="form-label">Product Name</label>
-            <input type="text" class="form-control" name="name" id="name" required value="{{ request.form.get('name', '') }}">
+            <input type="text" class="form-control" name="name" id="name" required
+                   value="{{ request.form.get('name', '') }}">
           </div>
 
+          <!-- Category -->
           <div class="mb-3">
             <label for="category" class="form-label">Category</label>
-            <input type="text" class="form-control" name="category" id="category" value="{{ request.form.get('category', '') }}">
+            <input type="text" class="form-control" name="category" id="category"
+                   value="{{ request.form.get('category', '') }}">
           </div>
 
+          <!-- Retail Price -->
           <div class="mb-3">
             <label for="price" class="form-label">Price (R)</label>
-            <input type="number" step="0.01" class="form-control" name="price" id="price" required value="{{ request.form.get('price', '') }}">
+            <input type="number" step="0.01" class="form-control" name="price" id="price" required
+                   value="{{ request.form.get('price', '') }}">
           </div>
 
+          <!-- New Fields -->
+
+          <!-- Product Size -->
+          <div class="mb-3">
+            <label for="size" class="form-label">Size / Weight</label>
+            <input type="text" class="form-control" name="size" id="size"
+                   placeholder="e.g., 2L, 12-pack, 500g"
+                   value="{{ request.form.get('size', '') }}">
+          </div>
+
+          <!-- Batch Size -->
+          <div class="mb-3">
+            <label for="batch_size" class="form-label">Batch Size (Units per Pack)</label>
+            <input type="number" class="form-control" name="batch_size" id="batch_size"
+                   placeholder="e.g., 12" min="1"
+                   value="{{ request.form.get('batch_size', 1) }}">
+          </div>
+
+          <!-- Batch Price -->
+          <div class="mb-3">
+            <label for="batch_price" class="form-label">Batch Price (R)</label>
+            <input type="number" step="0.01" class="form-control" name="batch_price" id="batch_price"
+                   placeholder="Wholesale price per batch"
+                   value="{{ request.form.get('batch_price', 0) }}">
+          </div>
+
+          <!-- Lower Bound -->
+          <div class="mb-3">
+            <label for="lower_bound" class="form-label">Restock Threshold</label>
+            <input type="number" class="form-control" name="lower_bound" id="lower_bound"
+                   placeholder="Minimum stock level before restocking"
+                   value="{{ request.form.get('lower_bound', 0) }}">
+          </div>
+
+          <!-- Batch Number -->
+          <div class="mb-3">
+            <label for="batch_number" class="form-label">Batch Number</label>
+            <input type="text" class="form-control" name="batch_number" id="batch_number"
+                   placeholder="Optional batch ID"
+                   value="{{ request.form.get('batch_number', '') }}">
+          </div>
+
+          <!-- Submit Button -->
           <button type="submit" class="btn btn-success w-100">Save Product</button>
         </form>
       </div>
       <div class="card-footer text-center">
-        <a href="{{ url_for('main.shop') }}" class="btn btn-outline-light btn-sm">← Back to Inventory</a>
+        <a href="{{ url_for('main.shop', shop_id=session.get('shop_id')) }}" class="btn btn-outline-light btn-sm">← Back to Inventory</a>
       </div>
     </div>
   </div>
