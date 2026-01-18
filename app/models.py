@@ -44,7 +44,20 @@ class Product(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(120), nullable=False)
     category = db.Column(db.String(120))
-    price = db.Column(db.Float)
+    
+    # Retail price
+    price = db.Column(db.Float, nullable=False)
+
+    # Batch info
+    batch_size = db.Column(db.Integer, default=1)  # e.g., 12 bottles per carton
+    batch_price = db.Column(db.Float)              # wholesale price per batch
+
+    # Stock control
+    lower_bound = db.Column(db.Integer, default=0)  # minimum units before restocking
+
+    # Optional fields
+    size = db.Column(db.String(50))          # e.g., "2L", "500g"
+    batch_number = db.Column(db.String(50))  # e.g., "B1234"
 
     shop_id = db.Column(db.Integer, db.ForeignKey('shop.id'), nullable=False)
     shop = db.relationship('Shop', back_populates='products')
@@ -52,7 +65,7 @@ class Product(db.Model):
     records = db.relationship('InventoryRecord', back_populates='product', cascade="all, delete-orphan")
 
     def __repr__(self):
-        return f'<Product {self.name}>'
+        return f'<Product {self.name} ({self.size})>'
 
 
 class InventoryRecord(db.Model):
