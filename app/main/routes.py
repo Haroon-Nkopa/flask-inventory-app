@@ -48,9 +48,17 @@ def add_product():
         return redirect(url_for('main.enter_shop'))
 
     if request.method == 'POST':
+        # Get values from form
         name = request.form['name'].strip()
         category = request.form['category'].strip()
         price = float(request.form['price'])
+
+        # ✅ New fields
+        size = request.form.get('size', '').strip()             # e.g., "2L", "12-pack"
+        batch_size = int(request.form.get('batch_size', 1))    # default 1
+        batch_price = float(request.form.get('batch_price', 0))  # default 0
+        lower_bound = int(request.form.get('lower_bound', 0))     # default 0
+        batch_number = request.form.get('batch_number', '').strip()
 
         # ✅ Check if product exists already in this shop
         existing_product = Product.query.filter_by(name=name, shop_id=shop_id).first()
@@ -63,6 +71,11 @@ def add_product():
             name=name,
             category=category,
             price=price,
+            size=size,
+            batch_size=batch_size,
+            batch_price=batch_price,
+            lower_bound=lower_bound,
+            batch_number=batch_number,
             shop_id=shop_id
         )
         db.session.add(new_product)
@@ -93,6 +106,7 @@ def add_product():
         return redirect(url_for('main.shop', shop_id=shop_id))
 
     return render_template('main/add_product.html')
+
 
 
 @main.route('/stock-history')
