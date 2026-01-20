@@ -3,6 +3,7 @@ import random
 from datetime import date, timedelta
 from app import db
 from app.models import InventoryRecord, Product
+from entryPoint import app
 
 def generate_inventory():
     # List of actual product IDs in your DB for shop_id=1
