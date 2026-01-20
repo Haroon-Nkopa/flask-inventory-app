@@ -53,4 +53,5 @@ def generate_inventory():
     print(f"Inserted {len(records_to_add)} inventory records.")
 
 if __name__ == "__main__":
-    generate_inventory()
+    with app.app_context():
+        generate_inventory()
