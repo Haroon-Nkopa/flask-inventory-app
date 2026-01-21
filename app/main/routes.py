@@ -1,12 +1,14 @@
 #import main blueprint
 from flask_login import current_user, logout_user
 from . import main
-from flask import render_template, request, redirect, url_for, flash, session   
+from flask import render_template, request, redirect, url_for, flash, session, send_file  
 from ..models import Product, InventoryRecord, Shop
 from .. import db
 from datetime import date , datetime  # Add this import
 from ..decorators import shop_required
 from ..auth.user_required import user_required
+from app.utils.stock_sheet_pdf import generate_stock_sheet_pdf
+
 
 #at shop decorator 
 
@@ -385,3 +387,25 @@ def logout():
 
     flash("You’ve been logged out successfully.", "info")
     return redirect(url_for('main.enter_shop'))
+
+
+@main.route('/print-stock-sheet')
+@shop_required
+def print_stock_sheet():
+    shop_id = session.get("shop_id")
+
+    if not shop_id:
+        flash("No shop selected", "warning")
+        return redirect(url_for("main.dashboard"))
+
+    shop = Shop.query.get_or_404(shop_id)
+    products = Product.query.filter_by(shop_id=shop_id).order_by(Product.name).all()
+
+    pdf_buffer = generate_stock_sheet_pdf(shop, products)
+
+    return send_file(
+        pdf_buffer,
+        as_attachment=True,
+        download_name=f"stock_sheet_{shop.name}.pdf",
+        mimetype="application/pdf"
+    )
