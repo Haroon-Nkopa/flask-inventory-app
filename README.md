@@ -38,7 +38,83 @@ Tech Stack
 	•	Server: AWS EC2 (Linux)
 	•	Security: Self-signed SSL certificate
 
-screenshorts
+Screenshorts
+
+Demo screenshorts are included above
+in the root directory of the project.
+
+Installation 
+
+# Clone repository
+git clone https://github.com/your-username/Flask-inventory-app.git
+
+# Enter project folder
+cd Flask-inventory-app
+
+# Create virtual environment
+python -m venv venv
+
+# Activate virtual environment
+source venv/bin/activate   # Linux / Mac
+venv\Scripts\activate      # Windows
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Run the app
+python app.py
+
+Deployment (AWS Linux)
+
+The app is hosted on an AWS Linux cloud machine:
+
+Server IP: 13.61.26.20
+Protocol: HTTPS
+SSL: Self-signed certificate
+
+SSL Notice
+
+This project uses a self-signed SSL certificate for HTTPS encryption. Browsers may show:
+
+“Your connection is not private”
+
+This is expected. You can safely proceed for development/testing.
+
+For production, use Let’s Encrypt or a trusted CA.
+
+
+Key Modules
+	•	app.py – Main Flask application
+	•	inventory/ – Stock logic
+	•	analytics/ – Sales & performance insights
+	•	templates/ – HTML views
+	•	static/ – CSS, JS, charts
+	•	database.db – SQLite database
+
+
+Use Cases
+	•	Small retail shops
+	•	Convenience stores
+	•	Mini supermarkets
+	•	Inventory tracking projects
+	•	Business analytics learning
+
+
+Future Improvements
+	•	User authentication / roles
+	•	REST API
+	•	Barcode scanning
+	•	Supplier management
+	•	Automatic reorder alerts
+	•	Cloud database (PostgreSQL)
+	•	Real SSL certificate
+	•	Mobile responsive optimization
+
+
+
+
+
+
 
 
 
