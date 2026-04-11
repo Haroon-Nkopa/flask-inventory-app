@@ -1,8 +1,8 @@
 #import main blueprint
 from flask_login import current_user, logout_user
 from . import main
-from flask import render_template, request, redirect, url_for, flash, session, send_file  
-from ..models import Product, InventoryRecord, Shop
+from flask import render_template, request, redirect, url_for, flash, session, send_file, jsonify  
+from ..models import Product, InventoryRecord, Shop, Sale, SaleItem
 from .. import db
 from datetime import date , datetime  # Add this import
 from ..decorators import shop_required
@@ -315,6 +315,26 @@ def summary():
         chart_labels.append(str(current_date))
         chart_values.append(round(daily_total, 2))
 
+        # Inside your summary route
+    total_potential_revenue = 0
+    total_potential_cost = 0
+
+    for p in products:
+        # Get latest quantity
+        latest_rec = InventoryRecord.query.filter_by(product_id=p.id).order_by(InventoryRecord.date.desc()).first()
+        qty = latest_rec.quantity if latest_rec else 0
+    
+        # Calculate unit cost
+        unit_cost = ((p.batch_price or 0) / p.batch_size) if p.batch_size and p.batch_size > 0 else 0
+
+    
+        # Accumulate totals
+        total_potential_revenue += (qty * p.price)
+        total_potential_cost += (qty * unit_cost)
+
+    potential_finish_profit = total_potential_revenue - total_potential_cost
+
+
 
     return render_template(
         'main/summary.html',
@@ -325,7 +345,6 @@ def summary():
         chart_labels=chart_labels,
         chart_values=chart_values
     )
-
 
 
 @main.route('/new-stocks', methods=['GET', 'POST'])
@@ -376,6 +395,7 @@ def new_stocks():
 
     return render_template('main/new_stocks.html', products=products)
 
+
 @main.route('/logout')
 def logout():
     # Log out the user with Flask-Login
@@ -409,3 +429,64 @@ def print_stock_sheet():
         download_name=f"stock_sheet_{shop.name}.pdf",
         mimetype="application/pdf"
     )
+
+
+
+@main.route('/pos', methods=['GET', 'POST'])
+@shop_required
+def pos():
+    if request.method == 'POST':
+        data = request.get_json()
+        items = data.get('items', [])
+        today_date = date.today()
+
+        try:
+            for item in items:
+                p_id = item['product_id']
+                sold_qty = int(item['quantity'])
+
+                # 1. Get the most recent record (could be today or a previous date)
+                last_record = InventoryRecord.query.filter_by(product_id=p_id)\
+                    .order_by(InventoryRecord.date.desc()).first()
+
+                if not last_record:
+                    product = Product.query.get(p_id)
+                    return jsonify({"error": f"No inventory record for {product.name}"}), 400
+
+                # 2. Check stock levels
+                if last_record.quantity < sold_qty:
+                    return jsonify({"error": f"Insufficient stock for {last_record.product.name}"}), 400
+
+                # 3. Handle 'Today' vs 'Past'
+                if last_record.date == today_date:
+                    # Update today's existing record
+                    last_record.quantity -= sold_qty
+                else:
+                    # Create a NEW record for today based on the previous balance
+                    new_record = InventoryRecord(
+                        product_id=p_id,
+                        date=today_date,
+                        quantity=last_record.quantity - sold_qty
+                    )
+                    db.session.add(new_record)
+
+            db.session.commit()
+            return jsonify({"status": "success"}), 200
+
+        except Exception as e:
+            db.session.rollback()
+            return jsonify({"error": f"Server error: {str(e)}"}), 500
+
+    # GET request
+    shop_id = session.get('shop_id')
+    products = Product.query.filter_by(shop_id=shop_id).order_by(Product.name.asc()).all()
+    return render_template('main/pos.html', products=products)
+
+
+@main.route('/sales-history')
+@shop_required
+def sales_history():
+    shop_id = session.get('shop_id')
+    # Fetch sales for this shop, newest first
+    sales = Sale.query.filter_by(shop_id=shop_id).order_by(Sale.timestamp.desc()).all()
+    return render_template('main/sales_history.html', sales=sales)

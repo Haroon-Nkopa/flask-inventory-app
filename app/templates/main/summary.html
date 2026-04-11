@@ -29,6 +29,27 @@
     </div>
     {% endif %}
 
+
+    <!-- Add this inside your <div class="container mt-5">, before the Sales Trend chart -->
+<div class="row mb-5">
+  <div class="col-md-6">
+    <div class="card bg-dark border-success p-3">
+      <h6 class="text-success text-uppercase small fw-bold">Actual Revenue (Last 14 Days)</h6>
+      <h2 class="text-white">R {{ "%.2f"|format(total_revenue or 0) }}</h2>
+      <p class="text-secondary mb-0">Money already in the till</p>
+    </div>
+  </div>
+  
+  <div class="col-md-6">
+    <div class="card bg-dark border-warning p-3">
+      <h6 class="text-warning text-uppercase small fw-bold">Potential Profit (Unrealized)</h6>
+      <h2 class="text-white">R {{ "%.2f"|format(potential_profit or 0) }}</h2>
+      <p class="text-secondary mb-0">If all current stock sells out</p>
+    </div>
+  </div>
+</div>
+
+
     <div class="mt-5">
       <h4 class="text-info mb-3">📈 Sales Trend</h4>
 

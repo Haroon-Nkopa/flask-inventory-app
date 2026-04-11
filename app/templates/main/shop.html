@@ -15,7 +15,8 @@
       class="btn btn-dark">
         🖨️ Print Stock Sheet
       </a>
-
+      <a href="{{ url_for('main.pos') }}" class="btn btn-warning text-dark fw-bold">🛒 Open POS</a>
+      <a href="{{ url_for('main.sales_history') }}" class="btn btn-light">🧾 Sales History</a>
       <a href="{{ url_for('main.add_product') }}" class="btn btn-success">+ Add Product</a>
       <a href="{{ url_for('main.stock_history') }}" class="btn btn-info">📊 View Stock History</a>
       <a href="{{ url_for('main.take_stock') }}" class="btn btn-primary ms-2">📋 Take Stock</a>
@@ -25,6 +26,7 @@
         <a href="{{ url_for('main.logout') }}" class="btn btn-sm btn-danger" style="background: #dc3545; color: white; padding: 6px 12px; border-radius: 6px; text-decoration: none;">Logout</a>
       </div>
 
+    
     </div>
 
         <!-- ✅ Flash messages -->

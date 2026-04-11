@@ -1,5 +1,6 @@
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import UserMixin
+from datetime import datetime
 
 db = SQLAlchemy()
 
@@ -42,7 +43,7 @@ class Product(db.Model):
     __tablename__ = 'product'
 
     id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(120), nullable=False, unique=True)
+    name = db.Column(db.String(120), nullable=False)
     category = db.Column(db.String(120))
     
     # Retail price
@@ -64,6 +65,10 @@ class Product(db.Model):
 
     records = db.relationship('InventoryRecord', back_populates='product', cascade="all, delete-orphan")
 
+    __table_args__ = (
+        db.UniqueConstraint('name', 'shop_id', name='unique_product_name_per_shop'),
+    )
+
     def __repr__(self):
         return f'<Product {self.name} ({self.size})>'
 
@@ -84,3 +89,36 @@ class InventoryRecord(db.Model):
 
     def __repr__(self):
         return f"<InventoryRecord {self.product_id} - {self.date} - {self.quantity}>"
+        
+
+class Sale(db.Model):
+    __tablename__ = 'sale'
+    id = db.Column(db.Integer, primary_key=True)
+    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+    total_amount = db.Column(db.Float, nullable=False)
+    
+    # Track which shop and user made the sale
+    shop_id = db.Column(db.Integer, db.ForeignKey('shop.id'), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+
+    # Relationship to the specific items in this sale
+    items = db.relationship('SaleItem', backref='sale', cascade="all, delete-orphan")
+
+    def __repr__(self):
+        return f"<Sale {self.id} - Total: R{self.total_amount}>"
+
+
+class SaleItem(db.Model):
+    __tablename__ = 'sale_item'
+    id = db.Column(db.Integer, primary_key=True)
+    sale_id = db.Column(db.Integer, db.ForeignKey('sale.id'), nullable=False)
+    product_id = db.Column(db.Integer, db.ForeignKey('product.id'), nullable=False)
+    
+    quantity = db.Column(db.Integer, nullable=False)
+    unit_price = db.Column(db.Float, nullable=False)  # Price at time of sale
+    total_price = db.Column(db.Float, nullable=False)
+
+    product = db.relationship('Product')
+
+    def __repr__(self):
+        return f"<SaleItem {self.product.name} x {self.quantity}>"
