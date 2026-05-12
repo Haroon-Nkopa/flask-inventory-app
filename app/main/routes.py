@@ -40,375 +40,331 @@ def shop():
 
 
 
-@main.route('/add', methods=['GET', 'POST'])
+#making the add route restful
+
+# 1. This just serves the HTML page shell
+@main.route('/add')
 @shop_required
 def add_product():
+    return render_template('main/add_product.html')
+
+# 2. This is the REST API endpoint that does the work
+@main.route('/api/products', methods=['POST'])
+@shop_required
+def create_product_api():
     shop_id = session.get('shop_id')
+    data = request.get_json() # Get JSON data from the fetch request
 
-    if not shop_id:
-        flash("No shop selected. Please log in again.", "warning")
-        return redirect(url_for('main.enter_shop'))
+    if not data:
+        return jsonify({"error": "No data provided"}), 400
 
-    if request.method == 'POST':
-        # Get values from form
-        name = request.form['name'].strip()
-        category = request.form['category'].strip()
-        price = float(request.form['price'])
+    name = data.get('name', '').strip()
+    
+    # Check if product exists
+    existing_product = Product.query.filter_by(name=name, shop_id=shop_id).first()
+    if existing_product:
+        return jsonify({"error": f"Product '{name}' already exists"}), 400
 
-        # ✅ New fields
-        size = request.form.get('size', '').strip()             # e.g., "2L", "12-pack"
-        batch_size = int(request.form.get('batch_size', 1))    # default 1
-        batch_price = float(request.form.get('batch_price', 0))  # default 0
-        lower_bound = int(request.form.get('lower_bound', 0))     # default 0
-        batch_number = request.form.get('batch_number', '').strip()
-
-        # ✅ Check if product exists already in this shop
-        existing_product = Product.query.filter_by(name=name, shop_id=shop_id).first()
-        if existing_product:
-            flash(f"Product '{name}' already exists in your shop.", "warning")
-            return redirect(url_for('main.add_product'))
-
-        # ✅ Create new product
+    try:
+        # Create new product using data from JSON
         new_product = Product(
             name=name,
-            category=category,
-            price=price,
-            size=size,
-            batch_size=batch_size,
-            batch_price=batch_price,
-            lower_bound=lower_bound,
-            batch_number=batch_number,
+            category=data.get('category', 'General').strip(),
+            price=float(data.get('price', 0)),
+            size=data.get('size', '').strip(),
+            batch_size=int(data.get('batch_size', 1)),
+            batch_price=float(data.get('batch_price', 0)),
+            lower_bound=int(data.get('lower_bound', 0)),
+            batch_number=data.get('batch_number', '').strip(),
             shop_id=shop_id
         )
         db.session.add(new_product)
-        db.session.flush()  # Flush to get new_product.id before full commit
+        db.session.flush()
 
-        # ✅ Step 1: find latest inventory date used in this shop
-        latest_record = (
-            db.session.query(InventoryRecord.date)
-            .join(Product)
-            .filter(Product.shop_id == shop_id)
-            .order_by(InventoryRecord.date.desc())
-            .first()
-        )
+        # Handle latest inventory record (keeping your logic)
+        latest_record = db.session.query(InventoryRecord.date)\
+            .join(Product).filter(Product.shop_id == shop_id)\
+            .order_by(InventoryRecord.date.desc()).first()
 
         if latest_record:
-            latest_date = latest_record.date
-            # ✅ Step 2: create an inventory record for this product with quantity 0
             new_record = InventoryRecord(
                 product_id=new_product.id,
-                date=latest_date,
+                date=latest_record.date,
                 quantity=0
             )
             db.session.add(new_record)
 
         db.session.commit()
+        return jsonify({"message": f"Product '{name}' added!", "id": new_product.id}), 201
 
-        flash(f"Product '{name}' added successfully!", "success")
-        return redirect(url_for('main.shop', shop_id=shop_id))
-
-    return render_template('main/add_product.html')
-
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 500
 
 
+
+#####
+
+
+#making the stock-history route restful. 
+# 1. The Shell Route
 @main.route('/stock-history')
 @shop_required
 def stock_history():
-    # Get all unique dates
+    return render_template('main/stock_history.html')
+
+# 2. The Data API
+@main.route('/api/stock-history')
+@shop_required
+def get_stock_history_api():
     shop_id = session.get('shop_id')
 
-    # ✅ Get only dates for this shop
-    dates = (
-        db.session.query(InventoryRecord.date)
-        .join(Product)
-        .filter(Product.shop_id == shop_id)
-        .distinct()
-        .order_by(InventoryRecord.date)
-        .all()
-    )
-    dates = [d[0] for d in dates]
+    # Get unique dates
+    date_query = db.session.query(InventoryRecord.date)\
+        .join(Product).filter(Product.shop_id == shop_id)\
+        .distinct().order_by(InventoryRecord.date).all()
+    
+    dates = [d[0].strftime('%Y-%m-%d') for d in date_query]
 
-    products = Product.query.filter_by(shop_id=session['shop_id']).all()
-    stock_data = {}
+    # Get stock data
+    products = Product.query.filter_by(shop_id=shop_id).all()
+    stock_data = []
 
     for product in products:
-        stock_data[product.name] = {}
-        for record in product.records:
-            stock_data[product.name][record.date] = record.quantity
+        # Create a dictionary for each product's history
+        history = {record.date.strftime('%Y-%m-%d'): record.quantity for record in product.records}
+        stock_data.append({
+            "name": product.name,
+            "history": history
+        })
 
-    return render_template('main/stock_history.html', dates=dates, stock_data=stock_data)
+    return jsonify({
+        "dates": dates,
+        "stock_data": stock_data
+    })
 
+######
 
-
-@main.route('/take-stock', methods=['GET', 'POST'])
+@main.route('/take-stock')
 @shop_required
 def take_stock():
+    # Just serve the shell
+    return render_template('main/stock_take.html', today=date.today())
+
+# API to GET the product list for the table
+@main.route('/api/stock-take-products', methods=['GET'])
+@shop_required
+def get_stock_take_products():
+    shop_id = session.get('shop_id')
+    products = Product.query.filter_by(shop_id=shop_id).all()
+    return jsonify([{"id": p.id, "name": p.name} for p in products])
+
+
+@main.route('/api/take-stock', methods=['POST'])
+@shop_required
+def submit_stock_api():
     shop_id = session.get('shop_id')
     products = Product.query.filter_by(shop_id=shop_id).all()
     today_date = date.today()
+    data = request.get_json()  # Get JSON from JS fetch
 
-    if request.method == 'POST':
+    # 1. Check if already captured today
+    existing_record = InventoryRecord.query.join(Product)\
+        .filter(Product.shop_id == shop_id, InventoryRecord.date == today_date).first()
+    
+    if existing_record:
+        return jsonify({"error": "Stock was already counted today."}), 400
 
-        # 🚫 First: Check if stock was already captured today
-        existing_record = (
-            InventoryRecord.query
-            .join(Product)
-            .filter(Product.shop_id == shop_id, InventoryRecord.date == today_date)
-            .first()
-        )
-        if existing_record:
-            flash("Stock was already counted today.", "warning")
-            return redirect(url_for('main.shop'))
+    # 2. Validate logic (no increases)
+    problematic = []
+    stock_to_save = []
 
-        # ✅ Step 2: Validate increases only (no stock decreases)
-        problematic_products = []  # Collect products with invalid decrease
+    for product in products:
+        # Match product ID from the incoming JSON data
+        qty_input = int(data.get(str(product.id), 0))
 
-        for product in products:
-            qty_input = request.form.get(f'quantity_{product.id}', 0)
+        previous_record = InventoryRecord.query.filter(
+            InventoryRecord.product_id == product.id,
+            InventoryRecord.date < today_date
+        ).order_by(InventoryRecord.date.desc()).first()
 
-            try:
-                qty_input = int(qty_input)
-            except ValueError:
-                qty_input = 0
+        if previous_record and qty_input > previous_record.quantity:
+            problematic.append(f"{product.name} (Prev: {previous_record.quantity}, New: {qty_input})")
+        
+        stock_to_save.append((product.id, qty_input))
 
-            # Get the last recorded stock value (before today)
-            previous_record = (
-                InventoryRecord.query
-                .filter(
-                    InventoryRecord.product_id == product.id,
-                    InventoryRecord.date < today_date
-                )
-                .order_by(InventoryRecord.date.desc())
-                .first()
-            )
+    if problematic:
+        return jsonify({
+            "error": "Stock count cannot be greater than previous records.",
+            "details": problematic
+        }), 400
 
-            # If a previous record exists, compare
-            if previous_record and qty_input > previous_record.quantity:
-                problematic_products.append(
-                    f"{product.name} (Prev: {previous_record.quantity}, New: {qty_input})"
-                )
+    # 3. Save
+    for p_id, qty in stock_to_save:
+        db.session.add(InventoryRecord(product_id=p_id, date=today_date, quantity=qty))
+    
+    db.session.commit()
+    return jsonify({"message": "Stock captured successfully for today!"}), 201
 
-        # 🚫 If any stock is greater than before, cancel & warn user
-        if problematic_products:
-            flash("Stock count cannot be greater than the previous record for the following products:", "danger")
-            for item in problematic_products:
-                flash(f"- {item}", "warning")
-            return redirect(url_for('main.take_stock'))
+#####
 
-        # ✅ If everything is correct → Save the records
-        for product in products:
-            qty_input = request.form.get(f'quantity_{product.id}', 0)
-            try:
-                qty_input = int(qty_input)
-            except ValueError:
-                qty_input = 0
 
-            new_record = InventoryRecord(
-                product_id=product.id,
-                date=today_date,
-                quantity=qty_input
-            )
-            db.session.add(new_record)
-
-        db.session.commit()
-        flash("Stock captured successfully for today!", "success")
-        return redirect(url_for('main.shop'))
-
-    return render_template('main/stock_take.html', products=products, today=today_date)
-
-@main.route('/summary', methods=['GET', 'POST'])
+@main.route('/summary')
 @shop_required
 def summary():
+    return render_template('main/summary.html')
+
+
+@main.route('/api/summary')
+@shop_required
+def get_summary_api():
     shop_id = session.get('shop_id')
+    dates_query = db.session.query(InventoryRecord.date).join(Product)\
+        .filter(Product.shop_id == shop_id).distinct().order_by(InventoryRecord.date).all()
+    dates = [d[0] for d in dates_query]
 
-    dates = [
-        r[0] for r in db.session.query(InventoryRecord.date)
-        .join(Product)
-        .filter(Product.shop_id == shop_id)
-        .distinct()
-        .order_by(InventoryRecord.date)
-        .all()
-    ]
+    if len(dates) < 2:
+        return jsonify({"error": "Not enough history"}), 200
 
-    if not dates or len(dates) < 2:
-        return render_template(
-            'main/summary.html',
-            message="Not enough stock history to generate a summary.",
-            stock_out_products=[],
-            fast_selling=[],
-            top_earning=[]
-        )
-
-    last_date = dates[-1]
-    prev_date = dates[-2]
-
-    total_business = 0
-    stock_out_products = []
-    sales_data = []  # temp list to calculate rankings
-
+    last_date, prev_date = dates[-1], dates[-2]
     products = Product.query.filter_by(shop_id=shop_id).all()
+    
+    total_business = 0
+    stock_out = []
+    sales_data = []
 
-    for p in products:
-        qty_last = db.session.query(InventoryRecord.quantity)\
-            .filter_by(product_id=p.id, date=last_date).scalar() or 0
-
-        qty_prev = db.session.query(InventoryRecord.quantity)\
-            .filter_by(product_id=p.id, date=prev_date).scalar() or 0
-
-        sold_qty = qty_prev - qty_last
-        if sold_qty < 0:
-            sold_qty = 0
-
-        revenue = sold_qty * (p.price or 0)
-        total_business += revenue
-
-        # Stock-out
-        if qty_last == 0:
-            stock_out_products.append(p)
-
-        # Collect sales info
-        if sold_qty > 0:
-            sales_data.append({
-                'name': p.name,
-                'category': p.category,
-                'sold_qty': sold_qty,
-                'revenue': revenue
-            })
-
-    # 🔥 Rankings
-    fast_selling = sorted(
-        sales_data, key=lambda x: x['sold_qty'], reverse=True
-    )[:10]
-
-    top_earning = sorted(
-        sales_data, key=lambda x: x['revenue'], reverse=True
-    )[:10]
-
-    message = (
-        f"Your business from {prev_date} to {last_date} "
-        f"generated R {total_business:.2f}"
-    )
-
-
-    # 📈 Line chart data (sales per date)
+    # Daily Chart Data
     chart_labels = []
     chart_values = []
-
     for i in range(1, len(dates)):
-        current_date = dates[i]
-        previous_date = dates[i - 1]
-
-        daily_total = 0
-
+        daily_rev = 0
         for p in products:
-            qty_curr = db.session.query(InventoryRecord.quantity)\
-                .filter_by(product_id=p.id, date=current_date).scalar() or 0
+            q_curr = db.session.query(InventoryRecord.quantity).filter_by(product_id=p.id, date=dates[i]).scalar() or 0
+            q_prev = db.session.query(InventoryRecord.quantity).filter_by(product_id=p.id, date=dates[i-1]).scalar() or 0
+            daily_rev += max(0, q_prev - q_curr) * (p.price or 0)
+        chart_labels.append(str(dates[i]))
+        chart_values.append(round(daily_rev, 2))
 
-            qty_prev = db.session.query(InventoryRecord.quantity)\
-                .filter_by(product_id=p.id, date=previous_date).scalar() or 0
-            sold = qty_prev - qty_curr
-            if sold < 0:
-                sold = 0
-
-            daily_total += sold * (p.price or 0)
-
-        chart_labels.append(str(current_date))
-        chart_values.append(round(daily_total, 2))
-
-        # Inside your summary route
-    total_potential_revenue = 0
-    total_potential_cost = 0
-
+    # Potential Profit Logic
+    pot_rev, pot_cost = 0, 0
     for p in products:
-        # Get latest quantity
-        latest_rec = InventoryRecord.query.filter_by(product_id=p.id).order_by(InventoryRecord.date.desc()).first()
-        qty = latest_rec.quantity if latest_rec else 0
-    
-        # Calculate unit cost
-        unit_cost = ((p.batch_price or 0) / p.batch_size) if p.batch_size and p.batch_size > 0 else 0
+        latest = InventoryRecord.query.filter_by(product_id=p.id).order_by(InventoryRecord.date.desc()).first()
+        qty = latest.quantity if latest else 0
+        unit_cost = (p.batch_price / p.batch_size) if (p.batch_price and p.batch_size) else 0
+        
+        pot_rev += (qty * (p.price or 0))
+        pot_cost += (qty * unit_cost)
+        
+        q_l = db.session.query(InventoryRecord.quantity).filter_by(product_id=p.id, date=last_date).scalar() or 0
+        q_p = db.session.query(InventoryRecord.quantity).filter_by(product_id=p.id, date=prev_date).scalar() or 0
+        sold = max(0, q_p - q_l)
+        rev = sold * (p.price or 0)
+        total_business += rev
+        
+        # FIX: Append objects so JS can read properties like .category and .price
+        if q_l == 0: 
+            stock_out.append({
+                "name": p.name,
+                "category": p.category or "-",
+                "price": float(p.price or 0)
+            })
+            
+        if sold > 0: 
+            sales_data.append({
+                'name': p.name, 
+                'category': p.category or "-",
+                'sold_qty': sold, 
+                'revenue': float(rev)
+            })
 
-    
-        # Accumulate totals
-        total_potential_revenue += (qty * p.price)
-        total_potential_cost += (qty * unit_cost)
+    # THIS RETURN MUST BE ALIGNED WITH THE 'FOR' LOOP (4 spaces from the start)
+    return jsonify({
+        "message": f"Business from {prev_date} to {last_date}: R {total_business:.2f}",
+        "total_revenue": total_business,
+        "potential_profit": round(pot_rev - pot_cost, 2),
+        "stock_out": stock_out,
+        "fast_selling": sorted(sales_data, key=lambda x: x['sold_qty'], reverse=True)[:10],
+        "top_earning": sorted(sales_data, key=lambda x: x['revenue'], reverse=True)[:10],
+        "chart": {"labels": chart_labels, "values": chart_values}
+    })
 
-    potential_finish_profit = total_potential_revenue - total_potential_cost
-
-
-
-    return render_template(
-        'main/summary.html',
-        message=message,
-        stock_out_products=stock_out_products,
-        fast_selling=fast_selling,
-        top_earning=top_earning,
-        chart_labels=chart_labels,
-        chart_values=chart_values
-    )
+#####
 
 
-@main.route('/new-stocks', methods=['GET', 'POST'])
+# 1. UI Route - Just serves the HTML shell
+@main.route('/new-stocks')
 @shop_required
 def new_stocks():
-    products = Product.query.filter_by(shop_id=session['shop_id']).all()
+    return render_template('main/new_stocks.html')
 
-    if request.method == 'POST':
-        product_id = int(request.form.get('product_id'))
-        new_qty = int(request.form.get('new_quantity', 0))
+# 2. API GET - Returns the product list for the dropdown/list
+@main.route('/api/products-list', methods=['GET'])
+@shop_required
+def get_products_list():
+    shop_id = session.get('shop_id')
+    products = Product.query.filter_by(shop_id=shop_id).all()
+    return jsonify([{"id": p.id, "name": p.name} for p in products])
 
-        product = Product.query.filter_by(id=product_id, shop_id=session['shop_id']).first()
-        if not product:
-            flash("Product not found for this shop.", "danger")
-            return redirect(url_for('main.add_product'))
+# 3. API POST - Processes the stock addition
+@main.route('/api/new-stocks', methods=['POST'])
+@shop_required
+def add_new_stock_api():
+    shop_id = session.get('shop_id')
+    data = request.get_json()
 
-        # Get the latest record (the last stock count)
+    if not data:
+        return jsonify({"error": "No data provided"}), 400
+
+    product_id = int(data.get('product_id'))
+    new_qty = int(data.get('new_quantity', 0))
+
+    # Verify product belongs to the shop
+    product = Product.query.filter_by(id=product_id, shop_id=shop_id).first()
+    if not product:
+        return jsonify({"error": "Product not found for this shop."}), 404
+
+    try:
+        # Get the latest record for backdating or initial entry
         last_record = (
             InventoryRecord.query
             .join(Product)
             .filter(
                 InventoryRecord.product_id == product_id,
-                Product.shop_id == session['shop_id']
+                Product.shop_id == shop_id
             )
             .order_by(InventoryRecord.date.desc())
             .first()
         )
 
         if last_record:
-            # Update the *previous* record to include this new stock
+            # Update the existing record (backdating logic)
             last_record.quantity += new_qty
-            db.session.commit()
-
-            flash(f"Added {new_qty} new units to {product.name} (backdated to {last_record.date}).", "success")
+            message = f"Added {new_qty} units to {product.name}. Total for {last_record.date}: {last_record.quantity}"
         else:
-            # If product has no previous record, treat as initial stock
-            new_record = InventoryRecord(
+            # Create initial stock record
+            last_record = InventoryRecord(
                 product_id=product_id,
                 date=date.today(),
                 quantity=new_qty
             )
-            db.session.add(new_record)
-            db.session.commit()
+            db.session.add(last_record)
+            message = f"Created initial stock record for {product.name} with {new_qty} units."
 
-            flash(f"Created initial stock record for {product.name} with {new_qty} units.", "info")
+        db.session.commit()
+        return jsonify({"message": message, "new_total": last_record.quantity}), 200
 
-        return redirect(url_for('main.shop'))
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 500
 
-    return render_template('main/new_stocks.html', products=products)
 
-
-@main.route('/logout')
+@main.route('/logout', methods=['POST']) # Change GET to POST for security
 def logout():
-    # Log out the user with Flask-Login
     logout_user()
+    session.clear()
+    return jsonify({"success": True, "redirect": url_for('main.enter_shop')}), 200
 
-    # Remove shop info from session
-    session.pop('shop_id', None)
-    session.pop('shop_name', None)
-
-    flash("You’ve been logged out successfully.", "info")
-    return redirect(url_for('main.enter_shop'))
-
-
+#######
 @main.route('/print-stock-sheet')
 @shop_required
 def print_stock_sheet():
@@ -430,63 +386,108 @@ def print_stock_sheet():
         mimetype="application/pdf"
     )
 
+######
 
 
-@main.route('/pos', methods=['GET', 'POST'])
+
+@main.route('/pos')
 @shop_required
 def pos():
-    if request.method == 'POST':
-        data = request.get_json()
-        items = data.get('items', [])
-        today_date = date.today()
+    return render_template('main/pos.html')
 
-        try:
-            for item in items:
-                p_id = item['product_id']
-                sold_qty = int(item['quantity'])
 
-                # 1. Get the most recent record (could be today or a previous date)
-                last_record = InventoryRecord.query.filter_by(product_id=p_id)\
-                    .order_by(InventoryRecord.date.desc()).first()
 
-                if not last_record:
-                    product = Product.query.get(p_id)
-                    return jsonify({"error": f"No inventory record for {product.name}"}), 400
-
-                # 2. Check stock levels
-                if last_record.quantity < sold_qty:
-                    return jsonify({"error": f"Insufficient stock for {last_record.product.name}"}), 400
-
-                # 3. Handle 'Today' vs 'Past'
-                if last_record.date == today_date:
-                    # Update today's existing record
-                    last_record.quantity -= sold_qty
-                else:
-                    # Create a NEW record for today based on the previous balance
-                    new_record = InventoryRecord(
-                        product_id=p_id,
-                        date=today_date,
-                        quantity=last_record.quantity - sold_qty
-                    )
-                    db.session.add(new_record)
-
-            db.session.commit()
-            return jsonify({"status": "success"}), 200
-
-        except Exception as e:
-            db.session.rollback()
-            return jsonify({"error": f"Server error: {str(e)}"}), 500
-
-    # GET request
+@main.route('/api/pos/products', methods=['GET'])
+@shop_required
+def get_pos_products():
     shop_id = session.get('shop_id')
-    products = Product.query.filter_by(shop_id=shop_id).order_by(Product.name.asc()).all()
-    return render_template('main/pos.html', products=products)
+    products = Product.query.filter_by(shop_id=shop_id).order_by(Product.name).all()
+    
+    return jsonify([{
+        "id": p.id, 
+        "name": p.name, 
+        "price": p.price  # Included for POS calculations
+    } for p in products])
+
+
+@main.route('/api/pos/checkout', methods=['POST'])
+@shop_required
+def pos_checkout_api():
+    data = request.get_json()
+    items = data.get('items', [])
+    today = date.today()
+
+    if not items:
+        return jsonify({"error": "No items in cart"}), 400
+
+    try:
+        for item in items:
+            p_id = item.get('product_id')
+            sold_qty = int(item.get('quantity', 0))
+
+            # Fetch the most recent inventory record
+            last_record = InventoryRecord.query.filter_by(product_id=p_id)\
+                .order_by(InventoryRecord.date.desc()).first()
+
+            if not last_record:
+                return jsonify({"error": f"No inventory record found for product ID {p_id}"}), 400
+
+            # Validation
+            if last_record.quantity < sold_qty:
+                return jsonify({"error": f"Insufficient stock for {last_record.product.name}"}), 400
+
+            # Logic: Update today or create new record for today
+            new_qty = last_record.quantity - sold_qty
+            
+            if last_record.date == today:
+                last_record.quantity = new_qty
+            else:
+                db.session.add(InventoryRecord(
+                    product_id=p_id,
+                    date=today,
+                    quantity=new_qty
+                ))
+
+        db.session.commit()
+        return jsonify({"status": "success", "message": "Transaction completed"}), 200
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": f"Server error: {str(e)}"}), 500
+
 
 
 @main.route('/sales-history')
 @shop_required
 def sales_history():
+    # Serves the HTML structure; data is fetched via JS on the client side
+    return render_template('main/sales_history.html')
+
+@main.route('/api/sales-history', methods=['GET'])
+@shop_required
+def get_sales_history_api():
     shop_id = session.get('shop_id')
-    # Fetch sales for this shop, newest first
-    sales = Sale.query.filter_by(shop_id=shop_id).order_by(Sale.timestamp.desc()).all()
-    return render_template('main/sales_history.html', sales=sales)
+    page = request.args.get('page', 1, type=int)
+    per_page = 20 
+
+    sales_pagination = Sale.query.filter_by(shop_id=shop_id)\
+        .order_by(Sale.timestamp.desc())\
+        .paginate(page=page, per_page=per_page)
+
+    return jsonify({
+        "sales": [{
+            "id": s.id,
+            "timestamp": s.timestamp.strftime('%d %b %Y, %H:%M'),
+            "total": float(s.total_amount),
+            # NEW: Add the nested items list here
+            "items": [{
+                "product_name": item.product.name,
+                "category": item.product.category,
+                "quantity": item.quantity,
+                "unit_price": float(item.unit_price),
+                "total_price": float(item.total_price)
+            } for item in s.items]
+        } for s in sales_pagination.items],
+        "total_pages": sales_pagination.pages,
+        "current_page": sales_pagination.page
+    })

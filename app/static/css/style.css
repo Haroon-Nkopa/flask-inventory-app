@@ -1,0 +1,24 @@
+/* StockWise Global Styles */
+body {
+    background-color: #212529; /* Matches bg-dark */
+    color: #f8f9fa; /* Matches text-light */
+}
+
+.shop-header {
+    background-color: #007bff;
+    color: white;
+    text-align: center;
+    padding: 12px;
+    font-size: 1.1rem;
+    font-weight: bold;
+    letter-spacing: 0.5px;
+    border-radius: 4px;
+    margin-bottom: 15px;
+}
+
+.card-custom {
+    background-color: #6c757d; /* Matches bg-secondary */
+    color: #f8f9fa;
+    border-radius: 1rem; /* Matches rounded-4 */
+    box-shadow: 0 1rem 3rem rgba(0,0,0,.175); /* Matches shadow-lg */
+}

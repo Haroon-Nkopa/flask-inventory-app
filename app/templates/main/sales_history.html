@@ -4,10 +4,12 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Sales History - {{ session['shop_name'] }}</title>
+  
+  <!-- Bootstrap 5 CSS -->
   <link href="https://jsdelivr.net" rel="stylesheet">
 
   <style>
-    body { background-color: #0b1220; color: #f8f9fa; }
+    body { background-color: #0b1220; color: #f8f9fa; font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }
     .card { background-color: #1a2234; border: none; border-radius: 12px; }
     
     /* Custom Accordion Styling */
@@ -30,10 +32,14 @@
     .accordion-button::after {
       filter: invert(1); /* Makes the arrow white */
     }
+    .accordion-button:focus { box-shadow: none; border-color: rgba(255,255,255,.1); }
+
     .table-dark {
       --bs-table-bg: #1a2234;
       margin-bottom: 0;
     }
+    .table { border-collapse: separate; border-spacing: 0 5px; }
+
     .status-badge {
       font-size: 0.85rem;
       padding: 5px 10px;
@@ -41,11 +47,17 @@
       background-color: #198754;
     }
 
-    /* Add this to your existing <style> */
-* { font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }
-.accordion-button:focus { box-shadow: none; border-color: rgba(255,255,255,.1); }
-.table { border-collapse: separate; border-spacing: 0 5px; }
-
+    /* Skeleton Loading Animation */
+    .skeleton {
+      background: #1a2234;
+      background: linear-gradient(110deg, #1a2234 8%, #2c364c 18%, #1a2234 33%);
+      border-radius: 5px;
+      background-size: 200% 100%;
+      animation: 1.5s shine linear infinite;
+    }
+    @keyframes shine {
+      to { background-position-x: -200%; }
+    }
   </style>
 </head>
 <body>
@@ -63,81 +75,38 @@
     </div>
   </div>
 
-  <!-- Sales Accordion -->
+  <!-- Sales Accordion Container -->
   <div class="accordion" id="salesAccordion">
-    {% for sale in sales %}
-    <div class="accordion-item">
-      <h2 class="accordion-header">
-        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#sale{{ sale.id }}">
-          <div class="d-flex justify-content-between align-items-center w-100 me-3">
-            <div>
-              <span class="fw-bold text-success">#{{ sale.id }}</span>
-              <span class="ms-3 text-secondary">{{ sale.timestamp.strftime('%d %b %Y, %H:%M') }}</span>
-            </div>
-            <div class="text-end">
-              <span class="me-3 status-badge">Paid</span>
-              <span class="fs-5 fw-bold text-success">R {{ "%.2f"|format(sale.total_amount) }}</span>
-            </div>
-          </div>
-        </button>
-      </h2>
-      <div id="sale{{ sale.id }}" class="accordion-collapse collapse" data-bs-parent="#salesAccordion">
-        <div class="accordion-body">
-          <div class="table-responsive">
-            <table class="table table-dark table-hover align-middle">
-              <thead class="text-secondary border-bottom border-secondary">
-                <tr>
-                  <th>Product Item</th>
-                  <th class="text-center">Quantity</th>
-                  <th class="text-end">Unit Price</th>
-                  <th class="text-end">Subtotal</th>
-                </tr>
-              </thead>
-              <tbody>
-                {% for item in sale.items %}
-                <tr>
-                  <td>
-                    <div class="fw-bold">{{ item.product.name }}</div>
-                    <small class="text-muted">{{ item.product.category }}</small>
-                  </td>
-                  <td class="text-center">{{ item.quantity }}</td>
-                  <td class="text-end">R {{ "%.2f"|format(item.unit_price) }}</td>
-                  <td class="text-end fw-bold">R {{ "%.2f"|format(item.total_price) }}</td>
-                </tr>
-                {% endfor %}
-              </tbody>
-              <tfoot>
-                <tr class="border-top border-secondary">
-                  <td colspan="3" class="text-end text-secondary uppercase fw-bold pt-3">Total Amount:</td>
-                  <td class="text-end text-success fs-5 fw-bold pt-3">R {{ "%.2f"|format(sale.total_amount) }}</td>
-                </tr>
-              </tfoot>
-            </table>
-          </div>
-        </div>
-      </div>
+    <!-- Initial Loading State (Skeleton) -->
+    <div id="loadingState" class="text-center py-5">
+      <div class="spinner-border text-success" role="status"></div>
+      <p class="mt-2 text-muted">Fetching transaction history...</p>
     </div>
-    {% else %}
-    <!-- Empty State -->
-    <div class="card p-5 text-center">
-      <div class="opacity-50">
-        <h1 class="display-1">📭</h1>
-        <h4>No sales recorded yet</h4>
-        <p>Once you complete a transaction in the POS, it will appear here.</p>
-        <a href="{{ url_for('main.pos') }}" class="btn btn-primary mt-3">Go to POS Terminal</a>
-      </div>
-    </div>
-    {% endfor %}
   </div>
 
   <!-- Footer Info -->
   <p class="text-center text-secondary mt-5 small">
-    &copy; {{ now.year if now else '2024' }} {{ session['shop_name'] }} Inventory System
+    &copy; <span id="currentYear"></span> {{ session['shop_name'] }} Inventory System
   </p>
 </div>
 
-<!-- Bootstrap Bundle with Popper -->
+<!-- 1. Configuration Script -->
+<script>
+  // Bridge Flask data to the external JS file
+  const SALES_CONFIG = {
+    apiUrl: "{{ url_for('main.get_sales_history_api') }}",
+    shopName: "{{ session['shop_name'] }}"
+  };
+  
+  // Set current year
+  document.getElementById('currentYear').textContent = new Date().getFullYear();
+</script>
+
+<!-- 2. Bootstrap Bundle with Popper -->
 <script src="https://jsdelivr.net"></script>
+
+<!-- 3. Your External Logic -->
+<script src="{{ url_for('static', filename='js/sales_history.js') }}"></script>
 
 </body>
 </html>

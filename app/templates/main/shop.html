@@ -1,77 +1,72 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>Inventory Dashboard</title>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-</head>
-<body class="bg-dark text-light">
-  <div class="container mt-5">
-    <div class="d-flex justify-content-between align-items-center mb-4">
+{% extends "base.html" %}
+
+{% block title %}Inventory Dashboard - {{ session.get('shop_name') }}{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-2">
       <h2>📦 Inventory Dashboard</h2>
 
-      <a href="{{ url_for('main.print_stock_sheet') }}"
-      target="_blank"
-      class="btn btn-dark">
-        🖨️ Print Stock Sheet
-      </a>
-      <a href="{{ url_for('main.pos') }}" class="btn btn-warning text-dark fw-bold">🛒 Open POS</a>
-      <a href="{{ url_for('main.sales_history') }}" class="btn btn-light">🧾 Sales History</a>
-      <a href="{{ url_for('main.add_product') }}" class="btn btn-success">+ Add Product</a>
-      <a href="{{ url_for('main.stock_history') }}" class="btn btn-info">📊 View Stock History</a>
-      <a href="{{ url_for('main.take_stock') }}" class="btn btn-primary ms-2">📋 Take Stock</a>
-      <a href="{{ url_for('main.new_stocks') }}" class="btn btn-secondary">New Stocks</a>  
-      <div style="display: flex; justify-content: space-between; align-items: center; background: #0b1220; color: white; padding: 10px 20px; border-radius: 8px; margin-bottom: 20px;">
-        <h3 style="margin: 0;">🛍️ {{ session.get(session["shop_id"], session["shop_name"]) }}</h3>
-        <a href="{{ url_for('main.logout') }}" class="btn btn-sm btn-danger" style="background: #dc3545; color: white; padding: 6px 12px; border-radius: 6px; text-decoration: none;">Logout</a>
+      <div class="btn-group">
+        <a href="{{ url_for('main.print_stock_sheet') }}"
+           target="_blank"
+           class="btn btn-dark"
+           onclick="if(!navigator.onLine){ alert('Cannot print without internet access.'); return false; }">
+           🖨️ Print Stock Sheet
+        </a>
+        <a href="{{ url_for('main.pos') }}" class="btn btn-warning text-dark fw-bold">🛒 Open POS</a>
+        <a href="{{ url_for('main.sales_history') }}" class="btn btn-light">🧾 Sales History</a>
+        <a href="{{ url_for('main.add_product') }}" class="btn btn-success">+ Add Product</a>
+        <a href="{{ url_for('main.stock_history') }}" class="btn btn-info">📊 View Stock History</a>
+        <a href="{{ url_for('main.take_stock') }}" class="btn btn-primary">📋 Take Stock</a>
+        <a href="{{ url_for('main.new_stocks') }}" class="btn btn-secondary">New Stocks</a>
       </div>
-
-    
     </div>
 
-        <!-- ✅ Flash messages -->
-  <div class="container mt-3">
-    {% with messages = get_flashed_messages(with_categories=true) %}
-      {% if messages %}
-        {% for category, message in messages %}
-          <div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible fade show" role="alert">
-            {{ message }}
-            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-          </div>
-        {% endfor %}
-      {% endif %}
-    {% endwith %}
-  </div>   
+    <div style="display: flex; justify-content: space-between; align-items: center; background: #1a2234; color: white; padding: 15px 20px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #2c364c;">
+        <h3 style="margin: 0;">🛍️ {{ session.get('shop_name') }}</h3>
+        <button id="logoutBtn" 
+                data-url="{{ url_for('main.logout') }}" 
+                class="btn btn-danger">
+            Logout
+        </button>
+    </div>
 
-    <table class="table table-dark table-striped table-hover text-center align-middle">
-      <thead class="table-success text-dark">
-        <tr>
-          <th>ID</th>
-          <th>Name</th>
-          <th>Category</th>
-          <th>Price (R)</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for p in products %}
-        <tr>
-          <td>{{ p.id }}</td>
-          <td>{{ p.name }}</td>
-          <td>{{ p.category }}</td>
-          <td>{{ "%.2f"|format(p.price) }}</td>
-        </tr>
-        {% else %}
-        <tr>
-          <td colspan="5">No products found.</td>
-        </tr>
-        {% endfor %}
-      </tbody>0
-    </table>
+    <div class="card bg-dark border-secondary">
+        <table class="table table-dark table-striped table-hover text-center align-middle mb-0">
+          <thead class="table-success text-dark">
+            <tr>
+              <th>ID</th>
+              <th>Name</th>
+              <th>Category</th>
+              <th>Price (R)</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for p in products %}
+            <tr>
+              <td>{{ p.id }}</td>
+              <td>{{ p.name }}</td>
+              <td>{{ p.category }}</td>
+              <td>{{ "%.2f"|format(p.price) }}</td>
+            </tr>
+            {% else %}
+            <tr>
+              <td colspan="4">No products found.</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+    </div>
 
     <div class="d-flex justify-content-end mt-3">
-      <a href="{{ url_for('main.summary') }}" class="btn btn-primary">📊 Summary</a>
+      <a href="{{ url_for('main.summary') }}" class="btn btn-outline-primary">📊 View Analytics Summary</a>
     </div>
+</div>
+{% endblock %}
 
-  </div>
-</body>
-</html>
+{% block scripts %}
+<script>
+    // Specific dashboard logic can go here if not in main.js
+</script>
+{% endblock %}
