@@ -1,7 +1,7 @@
 #import main blueprint
 from flask_login import current_user, logout_user
 from . import main
-from flask import render_template, request, redirect, url_for, flash, session, send_file, jsonify  
+from flask import render_template, request, redirect, url_for, flash, session, send_file, jsonify 
 from ..models import Product, InventoryRecord, Shop, Sale, SaleItem
 from .. import db
 from datetime import date , datetime  # Add this import
@@ -11,6 +11,7 @@ from app.utils.stock_sheet_pdf import generate_stock_sheet_pdf
 
 
 #at shop decorator 
+
 
 
 @main.route('/', methods=['GET', 'POST'])

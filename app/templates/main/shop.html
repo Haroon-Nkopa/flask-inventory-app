@@ -3,64 +3,70 @@
 {% block title %}Inventory Dashboard - {{ session.get('shop_name') }}{% endblock %}
 
 {% block content %}
-<div class="container mt-5">
-    <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-2">
-      <h2>📦 Inventory Dashboard</h2>
+<div class="container my-4 my-md-5">
+    <!-- Header Title and Main Action Buttons -->
+    <div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center mb-4 gap-3">
+      <h2 class="m-0 fs-3 fs-md-2">📦 Inventory Dashboard</h2>
 
-      <div class="btn-group">
+      <!-- Button Group converts to a vertical stack on mobile, horizontal row on desktop -->
+      <div class="d-flex flex-column flex-sm-row flex-wrap gap-2 w-100 w-md-auto">
         <a href="{{ url_for('main.print_stock_sheet') }}"
            target="_blank"
            class="btn btn-dark"
            onclick="if(!navigator.onLine){ alert('Cannot print without internet access.'); return false; }">
-           🖨️ Print Stock Sheet
+           🖨️ Print Sheet
         </a>
         <a href="{{ url_for('main.pos') }}" class="btn btn-warning text-dark fw-bold">🛒 Open POS</a>
-        <a href="{{ url_for('main.sales_history') }}" class="btn btn-light">🧾 Sales History</a>
-        <a href="{{ url_for('main.add_product') }}" class="btn btn-success">+ Add Product</a>
-        <a href="{{ url_for('main.stock_history') }}" class="btn btn-info">📊 View Stock History</a>
+        <a href="{{ url_for('main.sales_history') }}" class="btn btn-light">🧾 Sales</a>
+        <a href="{{ url_for('main.add_product') }}" class="btn btn-success">+ Product</a>
+        <a href="{{ url_for('main.stock_history') }}" class="btn btn-info">📊 Stock History</a>
         <a href="{{ url_for('main.take_stock') }}" class="btn btn-primary">📋 Take Stock</a>
         <a href="{{ url_for('main.new_stocks') }}" class="btn btn-secondary">New Stocks</a>
       </div>
     </div>
 
-    <div style="display: flex; justify-content: space-between; align-items: center; background: #1a2234; color: white; padding: 15px 20px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #2c364c;">
-        <h3 style="margin: 0;">🛍️ {{ session.get('shop_name') }}</h3>
+    <!-- Shop Name Banner (Replaced inline style with responsive CSS class) -->
+    <div class="shop-banner d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center gap-3">
+        <h3 class="m-0 fs-4 fs-sm-3">🛍️ {{ session.get('shop_name') }}</h3>
         <button id="logoutBtn" 
                 data-url="{{ url_for('main.logout') }}" 
-                class="btn btn-danger">
+                class="btn btn-danger w-100 w-sm-auto">
             Logout
         </button>
     </div>
 
-    <div class="card bg-dark border-secondary">
-        <table class="table table-dark table-striped table-hover text-center align-middle mb-0">
-          <thead class="table-success text-dark">
-            <tr>
-              <th>ID</th>
-              <th>Name</th>
-              <th>Category</th>
-              <th>Price (R)</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for p in products %}
-            <tr>
-              <td>{{ p.id }}</td>
-              <td>{{ p.name }}</td>
-              <td>{{ p.category }}</td>
-              <td>{{ "%.2f"|format(p.price) }}</td>
-            </tr>
-            {% else %}
-            <tr>
-              <td colspan="4">No products found.</td>
-            </tr>
-            {% endfor %}
-          </tbody>
-        </table>
+    <!-- Responsive Table Container Wrapper -->
+    <div class="card bg-dark border-secondary overflow-hidden">
+        <div class="table-responsive">
+            <table class="table table-dark table-striped table-hover text-center align-middle mb-0">
+              <thead class="table-success text-dark">
+                <tr>
+                  <th>ID</th>
+                  <th>Name</th>
+                  <th>Category</th>
+                  <th>Price (R)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for p in products %}
+                <tr>
+                  <td>{{ p.id }}</td>
+                  <td>{{ p.name }}</td>
+                  <td>{{ p.category }}</td>
+                  <td>{{ "%.2f"|format(p.price) }}</td>
+                </tr>
+                {% else %}
+                <tr>
+                  <td colspan="4">No products found.</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+        </div>
     </div>
 
-    <div class="d-flex justify-content-end mt-3">
-      <a href="{{ url_for('main.summary') }}" class="btn btn-outline-primary">📊 View Analytics Summary</a>
+    <div class="d-flex justify-content-stretch justify-content-md-end mt-3">
+      <a href="{{ url_for('main.summary') }}" class="btn btn-outline-primary w-100 w-md-auto">📊 View Analytics Summary</a>
     </div>
 </div>
 {% endblock %}
