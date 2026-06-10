@@ -417,29 +417,58 @@ def pos_checkout_api():
     data = request.get_json()
     items = data.get('items', [])
     today = date.today()
+    shop_id = session.get('shop_id')  # Needed to link the sale to the shop
 
     if not items:
         return jsonify({"error": "No items in cart"}), 400
 
     try:
+        # 1. Initialize a new overall Sale entry
+        new_sale = Sale(shop_id=shop_id, total_amount=0.0)
+        db.session.add(new_sale)
+        
+        # Flush here generates the new_sale.id early so items can reference it safely
+        db.session.flush() 
+        
+        running_total = 0.0
+
         for item in items:
             p_id = item.get('product_id')
             sold_qty = int(item.get('quantity', 0))
 
-            # Fetch the most recent inventory record
+            # Fetch the product directly to access its live price
+            product = Product.query.get(p_id)
+            if not product or product.shop_id != shop_id:
+                return jsonify({"error": f"Product ID {p_id} not found"}), 400
+
+            # Fetch the most recent inventory stock record
             last_record = InventoryRecord.query.filter_by(product_id=p_id)\
                 .order_by(InventoryRecord.date.desc()).first()
 
             if not last_record:
-                return jsonify({"error": f"No inventory record found for product ID {p_id}"}), 400
+                return jsonify({"error": f"No inventory record found for {product.name}"}), 400
 
-            # Validation
+            # Inventory validation
             if last_record.quantity < sold_qty:
-                return jsonify({"error": f"Insufficient stock for {last_record.product.name}"}), 400
+                return jsonify({"error": f"Insufficient stock for {product.name}"}), 400
 
-            # Logic: Update today or create new record for today
+            # 2. Financial Math Calculations
+            unit_price = float(product.price)
+            total_price = unit_price * sold_qty
+            running_total += total_price
+
+            # 3. Create the granular transaction record item
+            sale_item = SaleItem(
+                sale_id=new_sale.id,
+                product_id=p_id,
+                quantity=sold_qty,
+                unit_price=unit_price,
+                total_price=total_price
+            )
+            db.session.add(sale_item)
+
+            # 4. Existing Stock Inventory Management Logic
             new_qty = last_record.quantity - sold_qty
-            
             if last_record.date == today:
                 last_record.quantity = new_qty
             else:
@@ -449,13 +478,15 @@ def pos_checkout_api():
                     quantity=new_qty
                 ))
 
+        # 5. Save aggregate price details directly onto parent entry
+        new_sale.total_amount = running_total
+        
         db.session.commit()
-        return jsonify({"status": "success", "message": "Transaction completed"}), 200
+        return jsonify({"status": "success", "message": "Transaction and sales log completed"}), 200
 
     except Exception as e:
         db.session.rollback()
         return jsonify({"error": f"Server error: {str(e)}"}), 500
-
 
 
 @main.route('/sales-history')
@@ -492,3 +523,13 @@ def get_sales_history_api():
         "total_pages": sales_pagination.pages,
         "current_page": sales_pagination.page
     })
+
+
+@main.route('/api/check-session', methods=['GET'])
+def check_session():
+    if session.get('shop_id'):
+        return jsonify({
+            "authenticated": True, 
+            "shop_name": session.get('shop_name')
+        }), 200
+    return jsonify({"authenticated": False}), 200

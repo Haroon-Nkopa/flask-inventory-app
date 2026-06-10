@@ -1,9 +1,24 @@
+console.log("🔵 pos.js: Start loading...");
+
+
 let cart = {};
 
-// 1. Initial Load: Fetch products as soon as the page is ready
+
+// 1. Initial Load: Fetch products and set up IndexedDB as soon as the page is ready
 document.addEventListener('DOMContentLoaded', function() {
+    initOfflineDB();
     loadProducts();
 });
+
+const checkoutBtn = document.getElementById('checkoutBtn');
+
+if (checkoutBtn) {
+    // Correct: Pass 'checkout' without (), so it runs ONLY on click
+    checkoutBtn.addEventListener('click', checkout);
+}
+
+
+
 
 async function loadProducts() {
     const tableBody = document.getElementById('productTable');
@@ -30,11 +45,12 @@ async function loadProducts() {
         `).join('');
 
     } catch (error) {
+        // Fallback for when the browser is entirely offline and service worker cache isn't available yet
         tableBody.innerHTML = '<tr><td colspan="4" class="text-center text-danger py-4">Error loading products. Check connection.</td></tr>';
     }
 }
 
-// 2. Search Functionality (Stays the same)
+// 2. Search Functionality
 document.getElementById('searchBar').addEventListener('keyup', function() {
     let filter = this.value.toLowerCase();
     let rows = document.querySelectorAll('#productTable tr');
@@ -44,7 +60,7 @@ document.getElementById('searchBar').addEventListener('keyup', function() {
     });
 });
 
-// 3. Cart Logic (Simplified for better performance)
+// 3. Cart Logic
 function addToCart(id, name, price) {
     if (cart[id]) {
         cart[id].qty += 1;
@@ -87,7 +103,10 @@ function renderCart() {
     document.getElementById('grandTotal').innerText = `R ${total.toFixed(2)}`;
 }
 
-// 4. Checkout Logic (Updated to use ID selectors for reliability)
+// Helper wrapper for saving transactions locally when offline
+
+
+// 4. Checkout Logic (Updated to securely support offline transactions)
 async function checkout() {
     const checkoutBtn = document.getElementById('checkoutBtn');
     const btnText = document.getElementById('btnText');
@@ -98,15 +117,16 @@ async function checkout() {
         return;
     }
 
-    if (!navigator.onLine) {
-        alert("Cannot process transaction while offline.");
-        return;
-    }
-
     const orderData = Object.keys(cart).map(id => ({
         product_id: id,
         quantity: cart[id].qty
     }));
+
+    // If explicitly offline, intercept early and save locally
+    if (!navigator.onLine) {
+        saveTransactionLocally(orderData);
+        return;
+    }
 
     // UI Loading State
     checkoutBtn.disabled = true;
@@ -130,10 +150,14 @@ async function checkout() {
             alert("⚠️ " + (result.error || "Transaction failed"));
         }
     } catch (error) {
-        alert("Connection error. Please check your network.");
+        // Intercept network failures, dropping connections, or DNS issues
+        saveTransactionLocally(orderData);
     } finally {
         checkoutBtn.disabled = false;
         if (btnText) btnText.textContent = "Complete Transaction";
         if (spinner) spinner.classList.add('d-none');
     }
 }
+
+
+

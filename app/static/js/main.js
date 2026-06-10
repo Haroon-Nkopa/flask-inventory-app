@@ -100,3 +100,36 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 });
+
+
+//checking the internet connections at all times. 
+// Background Sync execution
+window.addEventListener('online', () => {
+  const transaction = localDB.transaction(['pending_transactions'], 'readwrite');
+  const store = transaction.objectStore('pending_transactions');
+  const getAllRequest = store.getAll();
+
+  getAllRequest.onsuccess = () => {
+    const records = getAllRequest.result;
+    if (records.length === 0) return;
+
+    console.log(`Syncing ${records.length} offline transactions...`);
+
+    records.forEach((record) => {
+      fetch('/api/pos/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items: record.items })
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (data.status === 'success') {
+          // Delete from local cache store once processed safely on live DB
+          const deleteTransaction = localDB.transaction(['pending_transactions'], 'readwrite');
+          deleteTransaction.objectStore('pending_transactions').delete(record.id);
+          console.log("Synced transaction item ID index: ", record.id);
+        }
+      });
+    });
+  };
+});

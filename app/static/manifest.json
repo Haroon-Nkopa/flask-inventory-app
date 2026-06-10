@@ -1,20 +1,41 @@
 {
+  "id": "/",
   "name": "StockWise Inventory Management",
   "short_name": "StockWise",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#212529",
+  "background_color": "#1a2234",
   "theme_color": "#1a2234",
+  "orientation": "portrait",
   "icons": [
+    
     {
-      "src": "/static/icons/icon-192.png",
-      "sizes": "192x192",
-      "type": "image/png"
+      "src": "/static/icon/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
     },
     {
-      "src": "/static/icons/icon-512.png",
+      "src": "/static/icon/icon-512.png",
       "sizes": "512x512",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/static/screenshots/desktop.png",
+      "sizes": "1280x720",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "StockWise Desktop Dashboard Layout"
+    },
+    {
+      "src": "/static/screenshots/mobile.png",
+      "sizes": "397x802",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "StockWise Mobile Inventory View"
     }
   ]
 }

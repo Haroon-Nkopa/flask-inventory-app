@@ -1,4 +1,4 @@
-from flask import Flask
+from flask import Flask, send_from_directory
 from flask_migrate import Migrate
 from flask_login import LoginManager
 from logging.handlers import RotatingFileHandler
@@ -61,5 +61,19 @@ def create_app():
     @login_manager.user_loader
     def load_user(user_id):
         return User.query.get(int(user_id))
+
+
+
+    @app.route('/sw.js')
+    def serve_service_worker():
+        # Points directly to the 'app' folder where sw.js lives
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        return send_from_directory(base_dir, 'sw.js', mimetype='application/javascript')
+
+    @app.route('/manifest.json')
+    def serve_manifest():
+        # Points to 'app/static/manifest.json'
+        static_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static')
+        return send_from_directory(static_dir, 'manifest.json', mimetype='application/json')
 
     return app
