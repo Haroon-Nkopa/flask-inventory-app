@@ -22,6 +22,11 @@
         <a href="{{ url_for('main.stock_history') }}" class="btn btn-info">📊 Stock History</a>
         <a href="{{ url_for('main.take_stock') }}" class="btn btn-primary">📋 Take Stock</a>
         <a href="{{ url_for('main.new_stocks') }}" class="btn btn-secondary">New Stocks</a>
+
+        {# Role protection check ensures only owners or managers see this button #}
+        {% if current_user.role in ['owner', 'manager'] %}
+            <a href="{{ url_for('main.add_user') }}" class="btn btn-outline-info">👤 + User</a>
+        {% endif %}
       </div>
     </div>
 
@@ -73,6 +78,35 @@
 
 {% block scripts %}
 <script>
-    // Specific dashboard logic can go here if not in main.js
+    document.getElementById('logoutBtn').addEventListener('click', async function() {
+        // Get the dynamic URL from the data attribute
+        const logoutUrl = this.getAttribute('data-url');
+        
+        try {
+            // Send secure POST request
+            const response = await fetch(logoutUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    // Include CSRF token here if your Flask app requires it
+                }
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                if (data.success) {
+                    // Redirect user to the shop login page
+                    window.location.href = data.redirect;
+                }
+            } else {
+                console.error('Logout failed with status:', response.status);
+                alert('Logout failed. Please try again.');
+            }
+        } catch (error) {
+            console.error('Network error during logout:', error);
+            alert('A network error occurred. Please check your connection.');
+        }
+    });
+
 </script>
 {% endblock %}

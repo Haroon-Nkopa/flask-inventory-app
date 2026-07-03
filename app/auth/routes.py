@@ -1,46 +1,63 @@
-from flask import Blueprint, render_template, request, redirect, url_for, flash, session
-from flask_login import current_user, login_user
+from flask import render_template, request, redirect, url_for, flash, session
+from flask_login import current_user, login_user, logout_user
 from werkzeug.security import check_password_hash
-from ..models import User  # import your User model
+from ..models import User
 from . import auth_bp
+from ..decorators import shop_required
 
 
-@auth_bp.route('/admin_login', methods=['GET', 'POST'])
-def admin_login():
-   
+
+@auth_bp.route('/login', methods=['GET', 'POST'])
+@shop_required
+def login():
+
+    next_endpoint = session.get('next_url')
+
     if current_user.is_authenticated:
-        print(session.get('next_url, user is already authenticated'))
-        return redirect(url_for(session.get('next_url')))
+
+        if next_endpoint:
+            return redirect(url_for(next_endpoint))
+        
+
+        
+
     if request.method == 'POST':
-        username = request.form.get('username').strip()
-        password = request.form.get('password').strip()
+        username = request.form.get('username', '').strip()
+        password = request.form.get('password', '').strip()
         user = User.query.filter_by(username=username).first()
 
-        if not user or not check_password_hash(user.password, password):
+        if not user:
             flash("Invalid username or password.", "danger")
-            return redirect(url_for('auth.admin_login'))
+            return redirect(url_for('auth.login'))
 
-        # Check role
-        if user.role != "admin":
-            flash("You do not have admin privileges.", "danger")
-            return redirect(url_for('auth.admin_login'))
+        if not check_password_hash(user.password, password):
+            flash("Invalid username or password.", "danger")
+            return redirect(url_for('auth.login'))
 
-        # Login the user (add to session)
+        # Login user
         login_user(user)
-        flash(f"Welcome, {user.username}!", "success")
+
+        flash(
+            f"Welcome back, {user.username}!",
+            "success"
+        )
+
+        # Redirect to requested page
+        next_endpoint = session.pop('next_url', None)
         
-        #lets add extra session data. 
-        session['user_id']= user.id
-        session['username']= user.username
-        session['role']= user.role
-        print(session.get('next_url'))
+        if next_endpoint:
+            return redirect(url_for(next_endpoint))
 
-        #next_url = session.pop('next_url', None)
-        return redirect(url_for(session.get('next_url')) or url_for('admin.admin'))
+        # Default destination
+        return redirect(url_for('main.shop'))
 
-        #return redirect(url_for(session.get('next_url')))
+    return render_template('auth/login.html')
 
-    print(session.get('next_url'))
-    # GET request -> show login form
-    return render_template('auth/admin_login.html')
 
+@auth_bp.route('/logout', methods=['GET'])
+def logout():
+
+    logout_user()
+    session.clear()
+
+    return redirect(url_for('main.enter_shop'))

@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Admin | Register Shops</title>
+  <title>Admin | Shop Subscriptions</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
   <!-- Bootstrap 5 -->
@@ -25,37 +25,21 @@
       border-radius: 12px;
       box-shadow: 0 0 25px rgba(0, 0, 0, 0.4);
     }
-    .form-control {
-      background-color: #1b2437;
-      border: none;
-      color: #fff;
-    }
-    .form-control:focus {
-      background-color: #1b2437;
-      color: #fff;
-      box-shadow: 0 0 0 2px #6c63ff;
-    }
-    .btn-primary {
-      background-color: #6c63ff;
-      border: none;
-    }
-    .btn-primary:hover {
-      background-color: #5848ff;
-    }
-    .shop-list li {
+    .shop-card {
       background: #1b2437;
       border: 1px solid #2a3550;
-      padding: 10px 15px;
-      border-radius: 8px;
-      margin-bottom: 8px;
+      padding: 18px 20px;
+      border-radius: 10px;
+      margin-bottom: 12px;
       display: flex;
       justify-content: space-between;
       align-items: center;
       transition: all 0.2s ease;
     }
-    .shop-list li:hover {
+    .shop-card:hover {
       background: #202c47;
       transform: translateY(-2px);
+      border-color: #3b496d;
     }
     .logout {
       position: absolute;
@@ -68,24 +52,54 @@
     .logout:hover {
       color: #fff;
     }
+    /* Custom Toggle Switch Colors */
+    .form-check-input {
+      background-color: #2a3550;
+      border-color: #414f73;
+      cursor: pointer;
+      width: 3rem !important;
+      height: 1.5rem !important;
+    }
+    .form-check-input:checked {
+      background-color: #10b981 !important;
+      border-color: #10b981 !important;
+    }
+    .badge-paid {
+      background-color: rgba(16, 185, 129, 0.15);
+      color: #10b981;
+      border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+    .badge-unpaid {
+      background-color: rgba(239, 68, 68, 0.15);
+      color: #ef4444;
+      border: 1px solid rgba(239, 68, 68, 0.3);
+    }
+    #toast-container {
+      z-index: 1060;
+    }
   </style>
 </head>
 <body>
 
-    <!-- ✅ ADD USER BUTTON -->
-      <div class="d-flex justify-content-start mb-4 ps-2">
-        <a href="{{ url_for('admin.add_user_to_shop') }}" class="btn btn-outline-light">
-          ➕ Add New User
-        </a>
-      </div>
+  <!-- Floating Toast Notifications -->
+  <div id="toast-container" class="position-fixed top-0 end-0 p-3"></div>
 
-
-  <a href="{{ url_for('auth.admin_login') }}" class="logout">Logout</a>
+  <!-- Top Navigation Controls -->
+  <div class="d-flex justify-content-between align-items-center px-4 pt-3">
+    <a href="{{ url_for('admin.add_user_to_shop') }}" class="btn btn-outline-light btn-sm">
+      ➕ Add New User
+    </a>
+    <a href="{{ url_for('admin.admin_logout') }}" class="logout">Logout</a>
+  </div>
 
   <div class="container">
     <div class="card p-4">
-      <h2 class="text-center mb-4">🛍️ Register New Shop</h2>
+      <div class="text-center mb-4">
+        <h2 class="fw-bold mb-1">💳 Shop Subscriptions</h2>
+        <p class="text-muted small">Toggle payment and access parameters for registered branches</p>
+      </div>
 
+      <!-- Flash Messages Container -->
       {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}
           {% for category, message in messages %}
@@ -97,30 +111,110 @@
         {% endif %}
       {% endwith %}
 
-      <form method="POST" class="mb-4">
-        <div class="input-group">
-          <input type="text" name="name" class="form-control" placeholder="Enter shop name..." required>
-          <button type="submit" class="btn btn-primary">Register</button>
-        </div>
-      </form>
-
-
-      <h4 class="mb-3">📋 Registered Shops</h4>
-      {% if shops %}
-        <ul class="shop-list list-unstyled">
+      <!-- Loop Through Shops -->
+      <div class="mt-2">
+        {% if shops %}
           {% for shop in shops %}
-            <li>
-              <span><strong>{{ shop.name }}</strong></span>
-              <span class="text-muted small">Products: {{ shop.products|length }}</span>
-            </li>
+            <div class="shop-card">
+              <div>
+                <h5 class="mb-1 fw-bold text-white">{{ shop.name }}</h5>
+                <div class="d-flex align-items-center gap-2">
+                  <span id="badge-{{ shop.id }}" class="badge rounded-pill {{ 'badge-paid' if shop.paid else 'badge-unpaid' }} px-2.5 py-1 small fw-semibold">
+                    {{ 'PAID' if shop.paid else 'UNPAID' }}
+                  </span>
+                  <span class="text-muted small">Products: {{ shop.products|length }}</span>
+                </div>
+              </div>
+              
+              <!-- Custom Toggle Control Switch -->
+              <div class="form-check form-switch mb-0">
+                <input class="form-check-input shop-toggle-switch" 
+                       type="checkbox" 
+                       role="switch" 
+                       id="switch-{{ shop.id }}"
+                       data-shop-id="{{ shop.id }}"
+                       {{ 'checked' if shop.paid }}>
+              </div>
+            </div>
           {% endfor %}
-        </ul>
-      {% else %}
-        <p class="text-muted text-center">No shops registered yet.</p>
-      {% endif %}
+        {% else %}
+          <div class="text-center py-5">
+            <span class="fs-1 text-muted">🏪</span>
+            <p class="text-muted mt-2 mb-0">No shops found in the registry database.</p>
+          </div>
+        {% endif %}
+      </div>
+
     </div>
   </div>
 
+  <!-- Bootstrap Bundle Script -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+
+  <!-- JavaScript Async Controller Logic -->
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const switches = document.querySelectorAll('.shop-toggle-switch');
+        
+        switches.forEach(toggle => {
+            toggle.addEventListener('change', function() {
+                const shopId = this.getAttribute('data-shop-id');
+                const isChecked = this.checked;
+                const badge = document.getElementById(`badge-${shopId}`);
+                
+                // Fire an immediate asynchronous backend database update request
+                fetch("{{ url_for('admin.toggle_shop_paid') }}", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({ shop_id: shopId })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        // Dynamically morph classes and states on success
+                        if (data.new_status) {
+                            badge.className = "badge rounded-pill badge-paid px-2.5 py-1 small fw-semibold";
+                            badge.textContent = "PAID";
+                        } else {
+                            badge.className = "badge rounded-pill badge-unpaid px-2.5 py-1 small fw-semibold";
+                            badge.textContent = "UNPAID";
+                        }
+                        showToast(data.message, 'success');
+                    } else {
+                        // Revert visual toggle state if server fails or flags access denial
+                        this.checked = !isChecked;
+                        showToast(data.error || 'Failed to update workspace privileges.', 'danger');
+                    }
+                })
+                .catch(error => {
+                    this.checked = !isChecked;
+                    showToast('Network error occurred. Try again.', 'danger');
+                });
+            });
+        });
+
+        // Dynamic Toast Notification Generator Helper
+        function showToast(message, type) {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            // Translate standard flask categories to matches
+            const alertClass = type === 'success' ? 'alert-success' : 'alert-danger';
+            
+            toast.className = `alert ${alertClass} alert-dismissible fade show shadow-lg border-0 text-white`;
+            toast.style.backgroundColor = type === 'success' ? '#10b981' : '#ef4444';
+            toast.role = 'alert';
+            toast.innerHTML = `
+                <div class="d-flex align-items-center pe-3 small fw-bold">
+                    ${type === 'success' ? '✅' : '❌'} ${message}
+                </div>
+                <button type="button" class="btn-close btn-close-white small" data-bs-dismiss="alert" aria-label="Close"></button>
+            `;
+            container.appendChild(toast);
+            setTimeout(() => { toast.remove(); }, 3500);
+        }
+    });
+  </script>
 </body>
 </html>

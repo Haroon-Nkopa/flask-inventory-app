@@ -17,6 +17,7 @@ class Shop(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(120), unique=True, nullable=False)
+    paid = db.Column(db.Boolean, default=False, nullable=False)
 
     products = db.relationship('Product', back_populates='shop', cascade="all, delete-orphan")
     users = db.relationship('User', secondary=user_shop, back_populates='shops')

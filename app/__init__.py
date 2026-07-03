@@ -9,6 +9,7 @@ from .models import db, User
 from .main import main as main_blueprint
 from .admin import admin_bp
 from .auth import auth_bp
+from .subscription import subscription
 
 migrate = Migrate()
 login_manager = LoginManager()
@@ -56,6 +57,7 @@ def create_app():
     app.register_blueprint(main_blueprint)
     app.register_blueprint(auth_bp)
     app.register_blueprint(admin_bp)
+    app.register_blueprint(subscription)
 
     # user loader
     @login_manager.user_loader

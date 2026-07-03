@@ -5,8 +5,7 @@ from flask import render_template, request, redirect, url_for, flash, session, s
 from ..models import Product, InventoryRecord, Shop, Sale, SaleItem
 from .. import db
 from datetime import date , datetime  # Add this import
-from ..decorators import shop_required
-from ..auth.user_required import user_required
+from ..decorators import shop_required, roles_required, payment_required
 from app.utils.stock_sheet_pdf import generate_stock_sheet_pdf
 
 
@@ -26,6 +25,7 @@ def enter_shop():
         if shop:
             session['shop_id'] = shop.id  # Save to session
             session['shop_name'] = shop.name  # Save shop name to session
+            session['shop_paid'] = shop.paid # payment satus of the shop
             return redirect(url_for('main.shop', shop_id=shop.id))
         else:
             flash('Shop not found. Please contact admin to register it. 083 224 2491', 'danger')
@@ -34,23 +34,35 @@ def enter_shop():
 
 @main.route('/shop')
 @shop_required
-@user_required
+@roles_required('owner', 'admin', 'manager', 'auditor', 'employee')
 def shop():
     products = Product.query.filter_by(shop_id=session['shop_id']).all()
     return render_template('main/shop.html', products=products)
 
+
+#a route that renders add_user.html
+@main.route('/add_user')
+@shop_required
+@roles_required('owner', 'manager')
+def add_user():
+    return render_template('main/add_user.html')
+
+# create a main add_user route, this one is post, only add the user to the database if the 
+#they are legible() and 
 
 
 #making the add route restful
 
 # 1. This just serves the HTML page shell
 @main.route('/add')
+@roles_required('owner', 'manager', 'employee')
 @shop_required
 def add_product():
     return render_template('main/add_product.html')
 
 # 2. This is the REST API endpoint that does the work
 @main.route('/api/products', methods=['POST'])
+@roles_required('owner', 'manager', 'employee')
 @shop_required
 def create_product_api():
     shop_id = session.get('shop_id')
@@ -110,12 +122,16 @@ def create_product_api():
 #making the stock-history route restful. 
 # 1. The Shell Route
 @main.route('/stock-history')
+@payment_required
+@roles_required('owner', 'manager')
 @shop_required
 def stock_history():
     return render_template('main/stock_history.html')
 
 # 2. The Data API
 @main.route('/api/stock-history')
+@payment_required
+@roles_required('owner', 'manager')
 @shop_required
 def get_stock_history_api():
     shop_id = session.get('shop_id')
@@ -147,6 +163,8 @@ def get_stock_history_api():
 ######
 
 @main.route('/take-stock')
+@payment_required
+@roles_required('owner', 'manager', 'employee', 'auditor')
 @shop_required
 def take_stock():
     # Just serve the shell
@@ -154,6 +172,8 @@ def take_stock():
 
 # API to GET the product list for the table
 @main.route('/api/stock-take-products', methods=['GET'])
+@payment_required
+@roles_required('owner', 'manager', 'employee', 'auditor')
 @shop_required
 def get_stock_take_products():
     shop_id = session.get('shop_id')
@@ -162,6 +182,8 @@ def get_stock_take_products():
 
 
 @main.route('/api/take-stock', methods=['POST'])
+@payment_required
+@roles_required('owner', 'manager', 'employee', 'auditor')
 @shop_required
 def submit_stock_api():
     shop_id = session.get('shop_id')
@@ -211,12 +233,16 @@ def submit_stock_api():
 
 
 @main.route('/summary')
+@payment_required
+@roles_required('owner')
 @shop_required
 def summary():
     return render_template('main/summary.html')
 
 
 @main.route('/api/summary')
+@payment_required
+@roles_required('owner')
 @shop_required
 def get_summary_api():
     shop_id = session.get('shop_id')
@@ -294,12 +320,14 @@ def get_summary_api():
 
 # 1. UI Route - Just serves the HTML shell
 @main.route('/new-stocks')
+@roles_required('owner', 'manager', 'employee', 'auditor')
 @shop_required
 def new_stocks():
     return render_template('main/new_stocks.html')
 
 # 2. API GET - Returns the product list for the dropdown/list
 @main.route('/api/products-list', methods=['GET'])
+@roles_required('owner', 'manager', 'employee', 'auditor')
 @shop_required
 def get_products_list():
     shop_id = session.get('shop_id')
@@ -308,6 +336,7 @@ def get_products_list():
 
 # 3. API POST - Processes the stock addition
 @main.route('/api/new-stocks', methods=['POST'])
+@roles_required('owner', 'manager', 'employee', 'auditor')
 @shop_required
 def add_new_stock_api():
     shop_id = session.get('shop_id')
@@ -367,6 +396,7 @@ def logout():
 
 #######
 @main.route('/print-stock-sheet')
+@roles_required('owner', 'manager','employee', 'auditor')
 @shop_required
 def print_stock_sheet():
     shop_id = session.get("shop_id")
@@ -392,6 +422,8 @@ def print_stock_sheet():
 
 
 @main.route('/pos')
+@payment_required
+@roles_required('owner', 'manager', 'employee', 'auditor')
 @shop_required
 def pos():
     return render_template('main/pos.html')
@@ -399,6 +431,8 @@ def pos():
 
 
 @main.route('/api/pos/products', methods=['GET'])
+@payment_required
+@roles_required('owner', 'manager', 'employee', 'auditor')
 @shop_required
 def get_pos_products():
     shop_id = session.get('shop_id')
@@ -411,91 +445,250 @@ def get_pos_products():
     } for p in products])
 
 
+from collections import defaultdict
+from datetime import date
+from sqlalchemy import func
+
+
 @main.route('/api/pos/checkout', methods=['POST'])
+@payment_required
+@roles_required('owner', 'manager', 'employee', 'auditor')
 @shop_required
 def pos_checkout_api():
-    data = request.get_json()
+    data = request.get_json() or {}
     items = data.get('items', [])
-    today = date.today()
-    shop_id = session.get('shop_id')  # Needed to link the sale to the shop
 
     if not items:
         return jsonify({"error": "No items in cart"}), 400
 
+    today = date.today()
+    shop_id = session.get('shop_id')
+
     try:
-        # 1. Initialize a new overall Sale entry
-        new_sale = Sale(shop_id=shop_id, total_amount=0.0)
-        db.session.add(new_sale)
-        
-        # Flush here generates the new_sale.id early so items can reference it safely
-        db.session.flush() 
-        
-        running_total = 0.0
+        # ----------------------------------------
+        # Consolidate duplicate cart items
+        # ----------------------------------------
+        cart = defaultdict(int)
 
         for item in items:
-            p_id = item.get('product_id')
-            sold_qty = int(item.get('quantity', 0))
+            try:
+                product_id = int(item.get('product_id'))
+                quantity = int(item.get('quantity', 0))
+            except (TypeError, ValueError):
+                return jsonify({
+                    "error": "Invalid product or quantity"
+                }), 400
 
-            # Fetch the product directly to access its live price
-            product = Product.query.get(p_id)
-            if not product or product.shop_id != shop_id:
-                return jsonify({"error": f"Product ID {p_id} not found"}), 400
+            if quantity <= 0:
+                continue
 
-            # Fetch the most recent inventory stock record
-            last_record = InventoryRecord.query.filter_by(product_id=p_id)\
-                .order_by(InventoryRecord.date.desc()).first()
+            cart[product_id] += quantity
 
-            if not last_record:
-                return jsonify({"error": f"No inventory record found for {product.name}"}), 400
+        if not cart:
+            return jsonify({
+                "error": "No valid items in cart"
+            }), 400
 
-            # Inventory validation
-            if last_record.quantity < sold_qty:
-                return jsonify({"error": f"Insufficient stock for {product.name}"}), 400
-
-            # 2. Financial Math Calculations
-            unit_price = float(product.price)
-            total_price = unit_price * sold_qty
-            running_total += total_price
-
-            # 3. Create the granular transaction record item
-            sale_item = SaleItem(
-                sale_id=new_sale.id,
-                product_id=p_id,
-                quantity=sold_qty,
-                unit_price=unit_price,
-                total_price=total_price
-            )
-            db.session.add(sale_item)
-
-            # 4. Existing Stock Inventory Management Logic
-            new_qty = last_record.quantity - sold_qty
-            if last_record.date == today:
-                last_record.quantity = new_qty
-            else:
-                db.session.add(InventoryRecord(
-                    product_id=p_id,
-                    date=today,
-                    quantity=new_qty
-                ))
-
-        # 5. Save aggregate price details directly onto parent entry
-        new_sale.total_amount = running_total
+        # --- OPTIMIZATION STEP: Get ALL shop product IDs for complete syncing ---
+        all_shop_product_ids = [
+            p.id for p in db.session.query(Product.id).filter_by(shop_id=shop_id).all()
+        ]
         
+        # Pull items from cart keys
+        cart_product_ids = list(cart.keys())
+
+        # ----------------------------------------
+        # Load cart products in ONE query
+        # ----------------------------------------
+        products = Product.query.filter(
+            Product.id.in_(cart_product_ids)
+        ).all()
+
+        product_map = {
+            product.id: product
+            for product in products
+        }
+
+        # ----------------------------------------
+        # Get latest inventory record per product (Expanded for ALL shop products)
+        # ----------------------------------------
+        latest_dates = db.session.query(
+            InventoryRecord.product_id,
+            func.max(InventoryRecord.date).label('latest_date')
+        ).filter(
+            InventoryRecord.product_id.in_(all_shop_product_ids)  # Pull historical records for everything
+        ).group_by(
+            InventoryRecord.product_id
+        ).subquery()
+
+        inventory_records = db.session.query(
+            InventoryRecord
+        ).join(
+            latest_dates,
+            (
+                InventoryRecord.product_id ==
+                latest_dates.c.product_id
+            ) &
+            (
+                InventoryRecord.date ==
+                latest_dates.c.latest_date
+            )
+        ).all()
+
+        inventory_map = {
+            record.product_id: record
+            for record in inventory_records
+        }
+
+        # ----------------------------------------
+        # Validate everything first
+        # ----------------------------------------
+        running_total = 0.0
+
+        for product_id, sold_qty in cart.items():
+
+            product = product_map.get(product_id)
+
+            if not product:
+                return jsonify({
+                    "error": f"Product ID {product_id} not found"
+                }), 400
+
+            # Same ownership check as original
+            if product.shop_id != shop_id:
+                return jsonify({
+                    "error": f"Product ID {product_id} not found"
+                }), 400
+
+            inventory = inventory_map.get(product_id)
+
+            if not inventory:
+                return jsonify({
+                    "error":
+                    f"No inventory record found for {product.name}"
+                }), 400
+
+            if inventory.quantity < sold_qty:
+                return jsonify({
+                    "error":
+                    f"Insufficient stock for {product.name}"
+                }), 400
+
+            running_total += (
+                float(product.price) * sold_qty
+            )
+
+        # ----------------------------------------
+        # Create sale
+        # ----------------------------------------
+        new_sale = Sale(
+            shop_id=shop_id,
+            total_amount=running_total
+        )
+
+        db.session.add(new_sale)
+        db.session.flush()
+
+        # ----------------------------------------
+        # Create sale items and update inventory
+        # ----------------------------------------
+        sale_items = []
+        synced_today_ids = set()  # Track which IDs have an active record for 'today'
+
+        for product_id, sold_qty in cart.items():
+
+            product = product_map[product_id]
+            inventory = inventory_map[product_id]
+
+            unit_price = float(product.price)
+
+            sale_items.append(
+                SaleItem(
+                    sale_id=new_sale.id,
+                    product_id=product_id,
+                    quantity=sold_qty,
+                    unit_price=unit_price,
+                    total_price=unit_price * sold_qty
+                )
+            )
+
+            new_qty = inventory.quantity - sold_qty
+
+            if inventory.date == today:
+                inventory.quantity = new_qty
+            else:
+                db.session.add(
+                    InventoryRecord(
+                        product_id=product_id,
+                        date=today,
+                        quantity=new_qty
+                    )
+                )
+            
+            synced_today_ids.add(product_id)
+
+        db.session.bulk_save_objects(sale_items)
+
+        # ----------------------------------------
+        # NEW LOGIC: In-Memory Daily Snapshot Sync
+        # ----------------------------------------
+        # Iterate over ALL products to catch any items not purchased today
+        for p_id in all_shop_product_ids:
+            if p_id in synced_today_ids:
+                continue  # Already updated during checkout loop
+                
+            last_record = inventory_map.get(p_id)
+            
+            if last_record and last_record.date < today:
+                # Copy previous snapshot count into today
+                db.session.add(
+                    InventoryRecord(
+                        product_id=p_id,
+                        date=today,
+                        quantity=last_record.quantity
+                    )
+                )
+            elif not last_record:
+                # Brand new product edge-case safety net
+                db.session.add(
+                    InventoryRecord(
+                        product_id=p_id,
+                        date=today,
+                        quantity=0
+                    )
+                )
+
+        # ----------------------------------------
+        # Commit all transitions safely
+        # ----------------------------------------
         db.session.commit()
-        return jsonify({"status": "success", "message": "Transaction and sales log completed"}), 200
+
+        return jsonify({
+            "status": "success",
+            "sale_id": new_sale.id,
+            "total_amount": running_total,
+            "message": "Transaction and sales log completed"
+        }), 200
 
     except Exception as e:
         db.session.rollback()
-        return jsonify({"error": f"Server error: {str(e)}"}), 500
+
+        return jsonify({
+            "error": f"Server error: {str(e)}"
+        }), 500
 
 
 @main.route('/sales-history')
+@payment_required
+@roles_required('owner', 'manager', 'auditor')
 @shop_required
 def sales_history():
     # Serves the HTML structure; data is fetched via JS on the client side
     return render_template('main/sales_history.html')
 
 @main.route('/api/sales-history', methods=['GET'])
+@payment_required
+@roles_required('owner', 'manager', 'auditor')
 @shop_required
 def get_sales_history_api():
     shop_id = session.get('shop_id')
@@ -525,7 +718,9 @@ def get_sales_history_api():
     })
 
 
+
 @main.route('/api/check-session', methods=['GET'])
+@roles_required('owner', 'manager', 'employee', 'auditor')
 def check_session():
     if session.get('shop_id'):
         return jsonify({
@@ -533,3 +728,5 @@ def check_session():
             "shop_name": session.get('shop_name')
         }), 200
     return jsonify({"authenticated": False}), 200
+
+

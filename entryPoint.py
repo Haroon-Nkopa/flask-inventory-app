@@ -9,5 +9,5 @@ app = create_app()
 # Optional: Flask shell context for convenience
 @app.shell_context_processor
 def make_shell_context():
-    return {'db': db, 'Product': Product, 'InventoryRecord': InventoryRecord}
+    return {'db': db, 'Product': Product, 'InventoryRecord': InventoryRecord ,'Shop': Shop}
 

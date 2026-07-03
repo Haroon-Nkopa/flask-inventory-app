@@ -1,34 +1,52 @@
 from . import admin_bp
 
-from flask import render_template, request, redirect, url_for, flash, session
+from flask import render_template, request, redirect, url_for, flash, session, abort, jsonify
 from ..models import Shop, db, User
-from werkzeug.security import generate_password_hash
-from flask_login import login_required, current_user
+from werkzeug.security import check_password_hash, generate_password_hash
+from flask_login import login_user, logout_user, login_required, current_user
+from functools import wraps
+from ..decorators import roles_required
 
+@admin_bp.route('/', methods=['GET', 'POST'])
+def admin_login():
+    """Isolated landing page and authentication handler for system administrators."""
+    # 1. If already authenticated as an admin, bypass and send to dashboard
+    if current_user.is_authenticated and getattr(current_user, 'role', None) == 'admin':
+        return redirect(url_for('admin.register_shop'))
 
-# Admin-only decorator
-def admin_required(f):
-    from functools import wraps
-    from flask import abort
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        if not current_user.is_authenticated or current_user.role != 'admin':
-            abort(403)
-        return f(*args, **kwargs)
-    return decorated_function
+    if request.method == 'POST':
+        username = request.form.get('username', '').strip()
+        password = request.form.get('password', '').strip()
 
-# Default route -> render admin login
-@admin_bp.route('/', methods=['GET'])
-def admin():
-    if current_user.is_authenticated and current_user.role == 'admin':
-        session['next_url'] = 'admin.register_shop'
-        return redirect(url_for(session.get('next_url')))
-    # Redirect to admin login page
-    session['next_url'] = request.endpoint
-    return redirect(url_for('auth.admin_login')) #this point to the admin login route in auth blueprint
+        # 2. Database validation check
+        user = User.query.filter_by(username=username).first()
+        
+        # 3. Security verification (Checks password AND strictly enforces 'admin' role)
+        if user and check_password_hash(user.password, password):
+            if user.role == 'admin':
+                login_user(user)
+                flash('Welcome back to the Control Panel, Administrator.', 'success')
+                return redirect(url_for('admin.register_shop'))
+            else:
+                flash('Access Denied: This portal is restricted to system administrators.', 'danger')
+                return redirect(url_for('admin.admin_login'))
+        else:
+            flash('Invalid admin credentials. Please try again.', 'danger')
+            return redirect(url_for('admin.admin_login'))
+
+    # GET → Render the brand-new dedicated login template
+    return render_template('admin/admin_login.html')
+
+@admin_bp.route('/logout')
+@login_required
+def admin_logout():
+    """Logs out the current administrator."""
+    logout_user()
+    flash('You have logged out of the Admin Portal.', 'info')
+    return redirect(url_for('admin.admin_login'))
 
 @admin_bp.route('/shops', methods=['GET', 'POST'])
-@admin_required
+@roles_required('admin')
 def register_shop():
     if request.method == 'POST':
         shop_name = request.form['name'].strip()
@@ -40,25 +58,38 @@ def register_shop():
             db.session.add(new_shop)
             db.session.commit()
             flash(f'Shop "{shop_name}" registered successfully!', 'success')
-        return redirect(url_for('main.enter_shop'))
+        return redirect(url_for('admin.register_shop'))
 
-    shops = Shop.query.all()
+    shops = Shop.query.order_by(Shop.name).all()
     return render_template('admin/shops.html', shops=shops)
 
 
-@admin_bp.route('/add_user_to_shop', methods=['GET', 'POST'])
-@admin_required
-def add_user_to_shop():
 
+@admin_bp.route('/toggle-shop-paid', methods=['POST'])
+@roles_required('admin')
+def toggle_shop_paid():
+    data = request.get_json() or {}
+    shop_id = data.get('shop_id')
+    shop = Shop.query.get(shop_id)
+    if not shop:
+        return jsonify({'success': False, 'error': 'Shop not found'}), 404
+    shop.paid = not shop.paid
+    db.session.commit()
+    return jsonify({
+        'success': True, 
+        'new_status': shop.paid,
+        'message': f"Shop '{shop.name}' is now {'Paid' if shop.paid else 'Unpaid'}."
+    })
+
+@admin_bp.route('/add_user_to_shop', methods=['GET', 'POST'])
+@roles_required('admin')
+def add_user_to_shop():
     if request.method == 'POST':
         username = request.form.get('username').strip()
         password = request.form.get('password').strip()
         role = request.form.get('role', 'user')
-
-        # ⬇️ MULTIPLE shops supported
         shop_ids = request.form.getlist('shop_ids')
 
-        # Basic validation
         if not username or not password or not shop_ids:
             flash("All fields are required.", "danger")
             return redirect(url_for('admin.add_user_to_shop'))
@@ -67,27 +98,13 @@ def add_user_to_shop():
             flash("Username already exists.", "danger")
             return redirect(url_for('admin.add_user_to_shop'))
 
-        # Create user
-        user = User(
-            username=username,
-            password=generate_password_hash(password),
-            role=role
-        )
-
-        # Attach shops
+        user = User(username=username, password=generate_password_hash(password), role=role)
         shops = Shop.query.filter(Shop.id.in_(shop_ids)).all()
         user.shops = shops
-
         db.session.add(user)
         db.session.commit()
-
         flash(f"User {username} created successfully.", "success")
         return redirect(url_for('admin.add_user_to_shop'))
 
-    # GET → show form
     shops = Shop.query.all()
-    return render_template(
-        'admin/add_user_to_shop.html',
-        shops=shops
-    )
-    pass
+    return render_template('admin/add_user_to_shop.html', shops=shops)

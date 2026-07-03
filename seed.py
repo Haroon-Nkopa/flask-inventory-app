@@ -1,46 +1,66 @@
-from werkzeug.security import generate_password_hash
-from app import db, create_app
-from app.models import User, Shop
+@main.route('/api/analytics/daily-cash-split', methods=['GET'])
+@shop_required
+def daily_cash_split_api():
+    shop_id = session.get('shop_id')
+    today = date.today()
 
-app = create_app()
+    try:
+        # 1. Fetch all items sold TODAY specifically
+        todays_sales = db.session.query(SaleItem).join(Sale).filter(
+            Sale.shop_id == shop_id,
+            func.date(Sale.created_at) == today
+        ).all()
 
-with app.app_context():
-    # 1. Create the Shop
-    shop_name = "Giant"
-    existing_shop = Shop.query.filter_by(name=shop_name).first()
-    
-    if not existing_shop:
-        new_shop = Shop(name=shop_name)
-        db.session.add(new_shop)
-        print(f"Shop '{shop_name}' created.")
-    else:
-        new_shop = existing_shop
-        print(f"Shop '{shop_name}' already exists.")
+        if not todays_sales:
+            return jsonify({
+                "total_revenue": 0.0,
+                "supplier_restock_fund": 0.0,
+                "take_home_profit": 0.0,
+                "msg": "No sales recorded today yet."
+            }), 200
 
-    # 2. Create the User
-    username = "rethabile"
-    existing_user = User.query.filter_by(username=username).first()
-    
-    if not existing_user:
-        hashed_pw = generate_password_hash("admin123")
-        new_user = User(
-            username=username,
-            password=hashed_pw,
-            role='admin'
-        )
-        db.session.add(new_user)
-        print(f"User '{username}' created.")
-    else:
-        new_user = existing_user
-        print(f"User '{username}' already exists.")
+        total_revenue = 0.0
+        supplier_restock_fund = 0.0
 
-    # 3. Link User to Shop (Relationship)
-    if new_shop not in new_user.shops:
-        new_user.shops.append(new_shop)
-        print(f"Linked {username} to {shop_name}.")
-    else:
-        print(f"{username} is already linked to {shop_name}.")
+        # 2. Extract exactly what cash belongs to who based on TODAY'S transactions
+        for item in todays_sales:
+            product = Product.query.get(item.product_id)
+            
+            # Add to total cash sitting in the physical drawer
+            total_revenue += float(item.total_price)
+            
+            # The exact wholesale cost replacement value of what left the store today
+            supplier_restock_fund += (int(item.quantity) * float(product.cost_price))
 
-    # Commit all changes
-    db.session.commit()
-    print("Database seeding completed successfully!")
+        # 3. Calculate what the owner can safely take home
+        take_home_profit = total_revenue - supplier_restock_fund
+
+        return jsonify({
+            "status": "success",
+            "date": str(today),
+            "financial_split": {
+                "total_cash_in_drawer": round(total_revenue, 2),
+                "untouchable_supplier_money": round(supplier_restock_fund, 2),
+                "safe_spendable_profit": round(take_home_profit, 2)
+            }
+        }), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+[ THE MAIZE MEAL SALE DAY ]
+Owner sells 1 bag of Maize Meal ──> Receives R180 Cash in hand.
+                                        │
+             ┌──────────────────────────┴──────────────────────────┐
+             ▼                                                     ▼
+     WHAT THE APP SAYS:                                    WHAT THE OWNER DOES:
+"Keep R140 for the wholesaler!                      "Wow, R180 extra cash today! 
+ Only R40 is yours to spend."                        Let me buy personal things or 
+             │                                       extra snacks I don't need."
+             ▼                                                     │
+[ RESULT: CASH DISAPPEARS ] <──────────────────────────────────────┘
+             │
+             ▼
+Two weeks later, the shelf is empty. 
+The owner needs R140, but the money was spent on the day of the sale.

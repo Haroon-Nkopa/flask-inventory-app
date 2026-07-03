@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+
+{% block title %}Subscription Inactive - StockWise{% endblock %}
+
+{% block content %}
+<div class="container my-5">
+  <div class="row justify-content-center">
+    <div class="col-md-6 col-lg-5 text-center">
+      
+      <!-- Visual Alert Anchor -->
+      <div class="mb-4">
+        <span class="display-1 text-danger">⚠️</span>
+      </div>
+
+      <!-- Main Alert Card -->
+      <div class="card bg-secondary border-0 shadow-lg text-light mb-4">
+        <div class="card-header bg-dark border-0 py-3">
+          <h4 class="mb-0 fw-bold text-uppercase">Subscription Inactive</h4>
+        </div>
+        <div class="card-body p-4">
+          <p class="fs-5 mb-4">
+            Access to <strong>{{ session.get('shop_name', 'this shop') }}</strong> is currently restricted because the subscription has expired or payment is pending.
+          </p>
+          
+          <div class="alert alert-dark border-0 text-light p-3 my-3">
+            <h6 class="fw-bold mb-2">How to activate?</h6>
+            <p class="small mb-0 text-secondary">
+              Please contact the system administrator to settle outstanding balances and reactivate your profile access dashboard instantly.
+            </p>
+          </div>
+
+          <!-- Direct Support Detail Callout -->
+          <div class="d-grid gap-2 my-4">
+            <a href="tel:073 900 0635" class="btn btn-warning text-dark fw-bold py-2">
+              📞 Call Admin: 073 900 0635
+            </a>
+          </div>
+        </div>
+      </div>
+
+      <!-- Action Navigation Links -->
+      <div class="d-flex justify-content-center gap-3">
+        <a href="{{ url_for('main.enter_shop') }}" class="btn btn-outline-light btn-sm px-4">
+          ⬅️ Choose Another Shop
+        </a>
+      </div>
+
+    </div>
+  </div>
+</div>
+{% endblock %}

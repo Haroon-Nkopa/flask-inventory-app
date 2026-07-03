@@ -1,0 +1,362 @@
+{% extends "subscription/base.html" %}
+
+{% block title %}Activate Your Store | Unravel ERP{% endblock %}
+
+{% block extra_css %}
+<!-- Premium Dynamic Styling -->
+<style>
+  body {
+    background: radial-gradient(circle at top center, #1e2640, #0b0f1a) !important;
+    color: #e9ecf5;
+    font-family: "Inter", system-ui, sans-serif;
+  }
+
+  .erp-hero-card {
+    background: rgba(18, 23, 42, 0.85);
+    border: 1px solid #2a3254;
+    border-radius: 24px;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(10px);
+    max-width: 800px;
+    margin: 2rem auto;
+    padding: 3rem 2rem;
+  }
+
+  .accent-title {
+    color: #ffffff;
+    font-weight: 800;
+    letter-spacing: -0.5px;
+  }
+
+  .feature-pill {
+    background: #161c33;
+    border: 1px solid #313a61;
+    border-radius: 12px;
+    padding: 1.25rem;
+    height: 100%;
+    transition: transform 0.2s ease, border-color 0.2s ease;
+  }
+
+  .feature-pill:hover {
+    transform: translateY(-3px);
+    border-color: #6c63ff;
+  }
+
+  .feature-icon {
+    font-size: 1.75rem;
+    margin-bottom: 0.5rem;
+    display: inline-block;
+  }
+
+  .choice-btn {
+    border-radius: 12px;
+    font-weight: 600;
+    transition: all 0.2s ease;
+    margin: 0.5rem;
+  }
+
+  .btn-outline-custom {
+    border: 2px solid #394060;
+    color: #cfd6f6;
+  }
+
+  .btn-outline-custom:hover {
+    background-color: #1c2444;
+    color: #ffffff;
+    border-color: #7870f9;
+  }
+
+  .btn-primary-gradient {
+    background: linear-gradient(90deg, #6c63ff, #8a83ff);
+    border: none;
+    color: white;
+  }
+
+  .btn-primary-gradient:hover {
+    background: linear-gradient(90deg, #5b52e8, #7870f9);
+    transform: translateY(-2px);
+    color: white;
+  }
+
+  /* Form Container Design */
+  .interactive-form-section {
+    display: none; /* Initially hidden, reveals smoothly via JS */
+    background: #11162a;
+    border: 1px solid #232b4e;
+    border-radius: 18px;
+    padding: 2rem;
+    animation: slideDown 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
+
+  @keyframes slideDown {
+    from { opacity: 0; transform: translateY(-15px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .senior-label {
+    color: #ffffff;
+    font-size: 1.05rem;
+    font-weight: 600;
+    margin-bottom: 0.4rem;
+  }
+
+  .senior-help-text {
+    color: #8c97c2;
+    font-size: 0.88rem;
+    margin-bottom: 0.6rem;
+  }
+
+  .custom-input, .custom-select {
+    background-color: #171e36 !important;
+    border: 2px solid #333c61 !important;
+    color: #ffffff !important;
+    border-radius: 10px;
+    font-size: 1.05rem;
+  }
+
+  .custom-input:focus, .custom-select:focus {
+    border-color: #6c63ff !important;
+    box-shadow: 0 0 8px rgba(108, 99, 255, 0.4) !important;
+  }
+
+  @media (max-width: 576px) {
+  .erp-hero-card {
+    padding: 2rem 1rem;
+  }
+
+  .accent-title {
+    font-size: 1.8rem;
+  }
+
+  .feature-pill {
+    text-align: center;
+  }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container text-center"> 
+  <div class="erp-hero-card"> 
+    
+    <!-- Introduction Section -->
+    <h1 class="accent-title mb-2">Welcome to Unravel ERP Systems</h1>
+    <p class="text-muted px-md-5 mb-5">
+      We make running your shop simple, clear, and modern. No more messy notebooks or lost calculations. Track everything seamlessly in real-time.
+    </p>
+
+    <!-- Value Propositions / Features Grid -->
+    <div class="row g-4 text-start mb-5">
+      <div class="col-md-4">
+        <div class="feature-pill">
+          <span class="feature-icon">📱</span>
+          <h5 class="text-white font-weight-bold">Works on Any Phone</h5>
+          <p class="text-muted small m-0">Big buttons and clear words built to read easily right from your smartphone anywhere.</p>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <div class="feature-pill">
+          <span class="feature-icon">📦</span>
+          <h5 class="text-white font-weight-bold">Stock Tracking</h5>
+          <p class="text-muted small m-0">Know exactly how many items are left on shelves. Get automatically warned before running out.</p>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <div class="feature-pill">
+          <span class="feature-icon">📊</span>
+          <h5 class="text-white font-weight-bold">Smart Till Counter</h5>
+          <p class="text-muted small m-0">Calculate daily counter cash totals instantly and check historic sales performance files secure.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Interactive Navigation Options Split -->
+    <div class="border-top border-dark pt-4 mb-4">
+      <h4 class="text-white mb-3">How would you like to set up your shop today?</h4>
+      <div class="d-flex flex-column flex-sm-row justify-content-center gap-3 mt-3">
+        
+        <!-- Option A: Contact Admin Directly -->
+        <a href="https://wa.me/27739000635?text=Hi%20I%20need%20help%20setting%20up%20my%20shop" 
+           target="_blank" 
+           class="btn btn-outline-custom choice-btn px-4 py-3 flex-grow-1 text-decoration-none">
+          📞 Contact Admin for Help
+          <small class="d-block text-muted font-weight-normal mt-1">Talk to Rethabile (073 900 0635)</small>
+        </a>
+
+        <!-- Option B: Trigger Interactive Form Dropdown -->
+        <button type="button" 
+                id="showFormBtn" 
+                class="btn btn-primary-gradient choice-btn px-4 py-3 flex-grow-1">
+          ✨ Register Shop Myself
+          <small class="d-block text-white-50 font-weight-normal mt-1">Fill out 2 simple questions</small>
+        </button>
+        
+      </div>
+    </div>
+
+    <!--this will display flashed messages-->
+    <div id="flash-message" style="display:none;"></div>
+
+    <!-- Lower Interactive Form Section (Under 4 fields, clear language) -->
+    <div id="registrationFormSection" class="interactive-form-section text-start mt-4">
+      <h4 class="text-white mb-3 pb-2 border-bottom border-secondary">Shop Registration Details</h4>
+      
+      <!-- Fallback processing URL used for mixed framework compatibility -->
+
+      <form id="shopForm">
+
+        <!-- Shop Name -->
+        <div class="mb-4">
+          <label for="shop_name" class="senior-label">
+            What is the name of your shop?
+          </label>
+          <div class="senior-help-text">
+            This name will appear on receipts and reports.
+          </div>
+          <input
+            type="text"
+            class="form-control custom-input p-3"
+            id="shop_name"
+            name="shop_name"
+            placeholder="e.g. Riverside Mini Market"
+            required>
+        </div>
+
+        <!-- Owner Name -->
+        <div class="mb-4">
+          <label for="owner_name" class="senior-label">
+            What is your name?
+          </label>
+          <div class="senior-help-text">
+            We use this to identify the owner of the shop.
+          </div>
+          <input
+            type="text"
+            class="form-control custom-input p-3"
+            id="owner_name"
+            name="owner_name"
+            placeholder="e.g. Rethabile Nkopa"
+            required>
+        </div>
+
+        <!-- Phone Number -->
+        <div class="mb-4">
+          <label for="phone_number" class="senior-label">
+            WhatsApp Number
+          </label>
+          <div class="senior-help-text">
+            We'll use this number for support and important account updates.
+          </div>
+          <input
+            type="tel"
+            class="form-control custom-input p-3"
+            id="phone_number"
+            name="phone_number"
+            placeholder="e.g. 073 900 0635"
+            required>
+        </div>
+
+        <!-- Password -->
+        <div class="mb-4">
+          <label for="password" class="senior-label">
+            Create a Password
+          </label>
+          <div class="senior-help-text">
+            Use at least 8 characters to keep your shop secure.
+          </div>
+          <input
+            type="password"
+            class="form-control custom-input p-3"
+            id="password"
+            name="password"
+            placeholder="Enter password"
+            required>
+        </div>
+
+        <!-- Submit -->
+        <button
+          type="submit"
+          class="btn btn-primary-gradient w-100 py-3 fw-bold shadow-sm rounded-3 fs-5">
+          Create My Shop
+        </button>
+
+      </form>
+    </div>
+
+  </div>
+</div>
+
+<!-- Interaction Handling Scripts -->
+<script>
+  const btn = document.getElementById('showFormBtn');
+  const formSection = document.getElementById('registrationFormSection');
+
+  btn.addEventListener('click', () => {
+      if (formSection.style.display === 'block') {
+          formSection.style.opacity = '0';
+
+          setTimeout(() => {
+              formSection.style.display = 'none';
+          }, 300);
+
+      } else {
+          formSection.style.display = 'block';
+          formSection.style.opacity = '1';
+
+          formSection.scrollIntoView({
+              behavior: 'smooth',
+              block: 'nearest'
+          });
+      }
+  });
+</script>
+
+<script>
+  document.getElementById("shopForm").addEventListener("submit", async function (e) {
+      e.preventDefault();
+
+      const formData = new FormData(this);
+
+      try {
+          const response = await fetch("/subscription/process/", {
+              method: "POST",
+              body: formData
+          });
+
+          const data = await response.json();
+
+          const msgBox = document.getElementById("flash-message");
+
+          msgBox.style.display = "block";
+          msgBox.style.padding = "12px";
+          msgBox.style.marginBottom = "15px";
+          msgBox.style.borderRadius = "8px";
+          msgBox.style.fontWeight = "bold";
+
+          if (response.ok) {
+              msgBox.style.background = "rgba(40,167,69,0.9)";
+              msgBox.style.color = "#fff";
+              msgBox.innerText = data.message;
+
+              // optional redirect after success
+              setTimeout(() => {
+                  window.location.href = "/auth/login";
+              }, 1500);
+
+          } else {
+              msgBox.style.background = "rgba(220,53,69,0.9)";
+              msgBox.style.color = "#fff";
+              msgBox.innerText = data.message;
+          }
+
+      } catch (error) {
+          const msgBox = document.getElementById("flash-message");
+
+          msgBox.style.display = "block";
+          msgBox.style.background = "rgba(220,53,69,0.9)";
+          msgBox.style.color = "#fff";
+          msgBox.innerText = "Network error. Please try again.";
+      }
+  });
+</script>
+{% endblock %}

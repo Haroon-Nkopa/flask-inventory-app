@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+
+{% block title %}Admin Portal Secure Login - StockWise{% endblock %}
+
+{% block content %}
+<div class="container my-5">
+  <div class="row justify-content-center align-items-center" style="min-height: 70vh;">
+    <div class="col-md-5 col-lg-4">
+      
+      <!-- Visual Threat Level Anchor -->
+      <div class="text-center mb-4">
+        <h1 class="display-3 mb-1 text-danger">🛡️</h1>
+        <h3 class="fw-bold text-uppercase tracking-wider text-warning mb-0">StockWise Admin</h3>
+        <p class="text-secondary small">Central Core Infrastructure Gateway</p>
+      </div>
+
+      <!-- Main Login Card Layout -->
+      <div class="card bg-secondary border-0 shadow-lg text-light">
+        <div class="card-header bg-dark border-0 py-3 text-center">
+          <h5 class="mb-0 fw-bold text-uppercase small text-secondary">Authorized Personnel Only</h5>
+        </div>
+        <div class="card-body p-4">
+          <form method="POST" action="{{ url_for('admin.admin_login') }}">
+            
+            <!-- Username Control -->
+            <div class="mb-3">
+              <label for="username" class="form-label fw-semibold text-secondary small">Admin Username</label>
+              <input type="text" 
+                     class="form-control bg-dark text-light border-0 py-2 font-monospace" 
+                     id="username" 
+                     name="username" 
+                     placeholder="Enter core username"
+                     required 
+                     autocomplete="off">
+            </div>
+
+            <!-- Password Control -->
+            <div class="mb-4">
+              <label for="password" class="form-label fw-semibold text-secondary small">Secure Credentials</label>
+              <input type="password" 
+                     class="form-control bg-dark text-light border-0 py-2 font-monospace" 
+                     id="password" 
+                     name="password" 
+                     placeholder="••••••••••••"
+                     required>
+            </div>
+
+            <!-- Authorization Submission Block -->
+            <div class="d-grid mb-2">
+              <button type="submit" class="btn btn-danger fw-bold py-2 text-uppercase tracking-wide">
+                Verify Authentication
+              </button>
+            </div>
+
+            <div class="text-center mt-3">
+              <a href="{{ url_for('main.enter_shop') }}" class="text-secondary small text-decoration-none hover-link">
+                ← Return to Shop Registry
+              </a>
+            </div>
+
+          </form>
+        </div>
+      </div>
+      
+    </div>
+  </div>
+</div>
+
+<style>
+  .hover-link:hover { color: #ffc107 !important; transition: color 0.2s ease-in-out; }
+</style>
+{% endblock %}
