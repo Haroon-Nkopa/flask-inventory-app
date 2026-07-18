@@ -1,7 +1,7 @@
 import os
 # import create_app from __init__.py
 from app import create_app, db  
-from app.models import Product, InventoryRecord
+from app.models import Product, InventoryRecord, ,Shop
 from flask import send_from_directory
 
 app = create_app()
