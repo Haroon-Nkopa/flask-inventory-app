@@ -1,0 +1,2 @@
+legit users can acess shops that they don't belong to as long as the role matches the decorator.
+adding daily revenue under analysis 
