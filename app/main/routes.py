@@ -239,6 +239,7 @@ def submit_stock_api():
 def summary():
     return render_template('main/summary.html')
 
+from sqlalchemy import func
 
 @main.route('/api/summary')
 @payment_required
@@ -246,6 +247,8 @@ def summary():
 @shop_required
 def get_summary_api():
     shop_id = session.get('shop_id')
+    
+    # 1. Fetch available dates for this specific shop
     dates_query = db.session.query(InventoryRecord.date).join(Product)\
         .filter(Product.shop_id == shop_id).distinct().order_by(InventoryRecord.date).all()
     dates = [d[0] for d in dates_query]
@@ -256,39 +259,63 @@ def get_summary_api():
     last_date, prev_date = dates[-1], dates[-2]
     products = Product.query.filter_by(shop_id=shop_id).all()
     
+    # 2. BATCH QUERY 1: Fetch ALL historical inventory records for these products in ONE shot
+    product_ids = [p.id for p in products]
+    all_historical_records = InventoryRecord.query.filter(
+        InventoryRecord.product_id.in_(product_ids),
+        InventoryRecord.date.in_(dates)
+    ).all()
+    
+    # Map to memory dictionary lookup speed: {(product_id, date): quantity}
+    history_map = {
+        (r.product_id, r.date): r.quantity for r in all_historical_records
+    }
+
+    # 3. BATCH QUERY 2: Fetch LATEST quantities for Potential Profit calculations in ONE shot
+    subq = db.session.query(
+        InventoryRecord.product_id,
+        func.max(InventoryRecord.date).label('max_date')
+    ).filter(InventoryRecord.product_id.in_(product_ids)).group_by(InventoryRecord.product_id).subquery()
+
+    latest_records = db.session.query(InventoryRecord).join(
+        subq, (InventoryRecord.product_id == subq.c.product_id) & (InventoryRecord.date == subq.c.max_date)
+    ).all()
+    
+    # Map to memory dictionary lookup speed: {product_id: quantity}
+    latest_qty_map = {r.product_id: r.quantity for r in latest_records}
+
+    # --- Start Processing Data Entirely in Memory ---
     total_business = 0
     stock_out = []
     sales_data = []
 
-    # Daily Chart Data
+    # Daily Chart Data Processing (Now runs instantly)
     chart_labels = []
     chart_values = []
     for i in range(1, len(dates)):
         daily_rev = 0
         for p in products:
-            q_curr = db.session.query(InventoryRecord.quantity).filter_by(product_id=p.id, date=dates[i]).scalar() or 0
-            q_prev = db.session.query(InventoryRecord.quantity).filter_by(product_id=p.id, date=dates[i-1]).scalar() or 0
+            q_curr = history_map.get((p.id, dates[i]), 0)
+            q_prev = history_map.get((p.id, dates[i-1]), 0)
             daily_rev += max(0, q_prev - q_curr) * (p.price or 0)
         chart_labels.append(str(dates[i]))
         chart_values.append(round(daily_rev, 2))
 
-    # Potential Profit Logic
+    # Potential Profit & Analytics Logic Processing (Now runs instantly)
     pot_rev, pot_cost = 0, 0
     for p in products:
-        latest = InventoryRecord.query.filter_by(product_id=p.id).order_by(InventoryRecord.date.desc()).first()
-        qty = latest.quantity if latest else 0
+        qty = latest_qty_map.get(p.id, 0)
         unit_cost = (p.batch_price / p.batch_size) if (p.batch_price and p.batch_size) else 0
         
         pot_rev += (qty * (p.price or 0))
         pot_cost += (qty * unit_cost)
         
-        q_l = db.session.query(InventoryRecord.quantity).filter_by(product_id=p.id, date=last_date).scalar() or 0
-        q_p = db.session.query(InventoryRecord.quantity).filter_by(product_id=p.id, date=prev_date).scalar() or 0
+        q_l = history_map.get((p.id, last_date), 0)
+        q_p = history_map.get((p.id, prev_date), 0)
         sold = max(0, q_p - q_l)
         rev = sold * (p.price or 0)
         total_business += rev
         
-        # FIX: Append objects so JS can read properties like .category and .price
         if q_l == 0: 
             stock_out.append({
                 "name": p.name,
@@ -304,7 +331,6 @@ def get_summary_api():
                 'revenue': float(rev)
             })
 
-    # THIS RETURN MUST BE ALIGNED WITH THE 'FOR' LOOP (4 spaces from the start)
     return jsonify({
         "message": f"Business from {prev_date} to {last_date}: R {total_business:.2f}",
         "total_revenue": total_business,
