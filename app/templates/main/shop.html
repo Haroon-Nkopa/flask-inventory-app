@@ -112,5 +112,56 @@
         }
     });
 
+
+        // --- PWA Installation Logic ---
+    let deferredPrompt = null;
+    const pwaInstallBtn = document.getElementById('pwaInstallBtn');
+    
+    // Detect if the PWA is already being run in standalone mode 
+    const isRunningStandalone = window.matchMedia('(display-mode: standalone)').matches 
+                                || window.navigator.standalone 
+                                || document.referrer.includes('android-app://');
+    
+    // Handle the installation trigger event
+    window.addEventListener('beforeinstallprompt', (e) => {
+        // Prevent the default native mini-infobar on mobile browsers
+        e.preventDefault();
+        
+        // Stash the event so it can be invoked by the custom button later
+        deferredPrompt = e;
+        
+        // Only display the custom button if the app is not already running standalone
+        if (!isRunningStandalone && pwaInstallBtn) {
+            pwaInstallBtn.classList.remove('d-none');
+        }
+    });
+    
+    if (pwaInstallBtn) {
+        pwaInstallBtn.addEventListener('click', async () => {
+            if (!deferredPrompt) return;
+            
+            // Present the native operational installer prompt to the user
+            deferredPrompt.prompt();
+            
+            // Wait for the user's interaction response with the choice prompt
+            const { outcome } = await deferredPrompt.userChoice;
+            console.log(`PWA installer installation selection outcome: ${outcome}`);
+            
+            // Clear the stashed prompt reference since it can only be used once
+            deferredPrompt = null;
+            
+            // Immediately drop the button out of view as installation is initiated
+            pwaInstallBtn.classList.add('d-none');
+        });
+    }
+    
+    // Clean up the layout instantly if the app successfully installs
+    window.addEventListener('appinstalled', () => {
+        console.log('PWA application was successfully initialized and installed.');
+        deferredPrompt = null;
+        if (pwaInstallBtn) pwaInstallBtn.classList.add('d-none');
+    });
+
+
 </script>
 {% endblock %}
