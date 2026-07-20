@@ -10,6 +10,10 @@
 
       <!-- Button Group converts to a vertical stack on mobile, horizontal row on desktop -->
       <div class="d-flex flex-column flex-sm-row flex-wrap gap-2 w-100 w-md-auto">
+        <button id="pwaInstallBtn" class="btn btn-warning text-dark fw-bold d-none">
+            📲 Install App
+        </button>
+
         <a href="{{ url_for('main.print_stock_sheet') }}"
            target="_blank"
            class="btn btn-dark"
