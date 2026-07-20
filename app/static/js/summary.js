@@ -1,83 +1,73 @@
-document.addEventListener('DOMContentLoaded', async () => {
-    try {
-        const response = await fetch('/api/summary');
-        const data = await response.json();
+{% extends "base.html" %}
 
-        if (data.error) {
-            document.getElementById('summary-alert').classList.replace('alert-success', 'alert-warning');
-            document.getElementById('summary-alert').innerText = data.error;
-            document.getElementById('summary-alert').classList.remove('d-none');
-            return;
-        }
+{% block title %}Inventory Summary | StockWise{% endblock %}
 
-        // Fill Stats
-        document.getElementById('summary-alert').innerText = data.message;
-        document.getElementById('summary-alert').classList.remove('d-none');
-        document.getElementById('actual-revenue').innerText = `R ${data.total_revenue.toFixed(2)}`;
-        document.getElementById('potential-profit').innerText = `R ${data.potential_profit.toFixed(2)}`;
+{% block content %}
+<div class="container mt-5 text-center">
+  <h2 class="mb-4">Inventory Summary</h2>
 
-        // Load Tables (Stock Out, Fast Selling, Top Earning)
-        renderTables(data);
+  <div id="summary-alert" class="alert alert-success d-none"></div>
 
-        // Render Chart (Your exact teal styling)
-        const ctx = document.getElementById('salesChart').getContext('2d');
-        new Chart(ctx, {
-            type: 'line',
-            data: {
-                labels: data.chart.labels,
-                datasets: [{
-                    label: 'Daily Sales (R)',
-                    data: data.chart.values,
-                    borderColor: '#0dcaf0',
-                    backgroundColor: 'rgba(13, 202, 240, 0.2)',
-                    tension: 0.4,
-                    fill: true,
-                    pointRadius: 5
-                }]
-            },
-            options: {
-                responsive: true,
-                plugins: { legend: { labels: { color: '#fff' } } },
-                scales: {
-                    x: { ticks: { color: '#ccc' }, grid: { color: '#333' } },
-                    y: { ticks: { color: '#ccc' }, grid: { color: '#333' } }
-                }
-            }
-        });
-    } catch (e) {
-        console.error("Summary failed to load:", e);
-    }
-});
+  <!-- Revenue & Potential Profit Cards -->
+  <div class="row mb-5">
+    <div class="col-md-6">
+      <div class="card bg-dark border-success p-3">
+        <h6 class="text-success text-uppercase small fw-bold">Actual Revenue</h6>
+        <h2 id="actual-revenue" class="text-white">R 0.00</h2>
+        <p class="text-secondary mb-0">Money already in the till</p>
+      </div>
+    </div>
+    <div class="col-md-6">
+      <div class="card bg-dark border-warning p-3">
+        <h6 class="text-warning text-uppercase small fw-bold">Potential Profit (Unrealized)</h6>
+        <h2 id="potential-profit" class="text-white">R 0.00</h2>
+        <p class="text-secondary mb-0">If all current stock sells out</p>
+      </div>
+    </div>
+  </div>
 
-function renderTables(data) {
-    const container = document.getElementById('tables-container');
-    let html = '';
+<!-- Past 7 Days Revenue Table -->
+<div class="card bg-dark border-secondary overflow-hidden mb-5">
+    <div class="card-header bg-success text-dark fw-bold">
+        🗓️ Daily Revenue (Past 7 Days)
+    </div>
+    <div class="table-responsive">
+        <table class="table table-dark table-striped table-hover text-center align-middle mb-0">
+            <thead>
+                <tr>
+                    <th>Day & Date</th>
+                    <th class="text-success">Revenue</th>
+                </tr>
+            </thead>
+            <tbody id="weekly-revenues-body">
+                <tr>
+                    <td colspan="2" class="text-muted">Loading weekly data...</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
 
-    // Stock Out Table
-    if (data.stock_out && data.stock_out.length > 0) {
-        html += `
-        <div class="alert alert-warning mt-4 text-start">
-            <h5 class="mb-3 text-center">⚠️ Stock Out Products (${data.stock_out.length})</h5>
-            <table class="table table-dark table-striped table-bordered">
-                <thead><tr><th>Product</th><th>Category</th><th>Price (R)</th></tr></thead>
-                <tbody>${data.stock_out.map(p => `<tr><td>${p.name}</td><td>${p.category || '-'}</td><td>${p.price.toFixed(2)}</td></tr>`).join('')}</tbody>
-            </table>
-        </div>`;
-    }
+  <!-- Sales Trend Chart -->
+  <div class="mt-5">
+    <h4 class="text-info mb-3">📈 Sales Trend</h4>
+    <div class="bg-dark p-3 rounded">
+      <canvas id="salesChart"></canvas>
+    </div>
+  </div>
 
-    // Fast Selling Table
-    if (data.fast_selling && data.fast_selling.length > 0) {
-        html += `
-        <div class="mt-5">
-            <h4 class="text-warning mb-3">🔥 Fast Selling Products</h4>
-            <table class="table table-dark table-striped table-bordered">
-                <thead><tr><th>Product</th><th>Category</th><th>Units Sold</th></tr></thead>
-                <tbody>${data.fast_selling.map(p => `<tr><td>${p.name}</td><td>${p.category || '-'}</td><td><strong>${p.sold_qty}</strong></td></tr>`).join('')}</tbody>
-            </table>
-        </div>`;
-    }
+  <!-- Dynamic Tables Container -->
+  <div id="tables-container" class="container mt-5">
+    <!-- JS will inject Stock-out, Fast Selling, and Top Earning tables here -->
+  </div>
 
-    container.innerHTML = html;
-}
+  <div class="mt-3">
+    <a href="{{ url_for('main.shop') }}" class="btn btn-outline-light">← Back to Inventory</a>
+  </div>
+</div>
+{% endblock %}
 
-
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="{{ url_for('static', filename='js/summary.js') }}"></script>
+{% endblock %}
