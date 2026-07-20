@@ -239,7 +239,6 @@ def submit_stock_api():
 def summary():
     return render_template('main/summary.html')
 
-from sqlalchemy import func
 
 @main.route('/api/summary')
 @payment_required
@@ -330,7 +329,27 @@ def get_summary_api():
                 'sold_qty': sold, 
                 'revenue': float(rev)
             })
+ # Extract the last 7 calculated entries from the chart arrays
+    weekly_revenues_list = []
+    
+    # Loop through the last 7 elements (or fewer if history is short)
+    for lbl, val in zip(chart_labels[-7:], chart_values[-7:]):
+        try:
+            # Parse 'YYYY-MM-DD' string back into a Python date object
+            parsed_date = datetime.strptime(lbl, "%Y-%m-%d").date()
+            # Format to look like: "Monday, 12 June"
+            formatted_label = parsed_date.strftime("%A, %d %B")
+        except ValueError:
+            # Fallback to the original label string if format fails
+            formatted_label = lbl
+            
+        weekly_revenues_list.append({
+            "date_label": formatted_label,
+            "revenue": val
+        })
 
+
+    # THIS RETURN MUST BE ALIGNED WITH THE 'FOR' LOOP (4 spaces from the start)
     return jsonify({
         "message": f"Business from {prev_date} to {last_date}: R {total_business:.2f}",
         "total_revenue": total_business,
@@ -338,7 +357,8 @@ def get_summary_api():
         "stock_out": stock_out,
         "fast_selling": sorted(sales_data, key=lambda x: x['sold_qty'], reverse=True)[:10],
         "top_earning": sorted(sales_data, key=lambda x: x['revenue'], reverse=True)[:10],
-        "chart": {"labels": chart_labels, "values": chart_values}
+        "chart": {"labels": chart_labels, "values": chart_values},
+        "weekly_revenues": weekly_revenues_list
     })
 
 #####
