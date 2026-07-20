@@ -5,3 +5,4 @@
 5,We must find an easy way to create a shop(adding products to the shop). 
 6,on the pos the check is at the bottom of the page, which quickly becames a problem as soon as we have a lot of products, caause the search bar is at the top, and the user has to scroll all the way to the bottom to do the 
 checkout. so we need a botton at the top that will take us to the bottom of the page. 
+we wanna be able to modify product details. later after being made.
