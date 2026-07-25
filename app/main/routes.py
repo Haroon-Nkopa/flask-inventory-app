@@ -114,7 +114,15 @@ def create_product_api():
         db.session.rollback()
         return jsonify({"error": str(e)}), 500
 
-
+#edit product details
+@main.route('/edit-product', methods=['GET'])
+@roles_required('owner', 'manager', 'employee')
+@shop_required
+def edit_product_page():
+    shop_id = session.get('shop_id')
+    # Fetch all items sorted alphabetically to keep the dropdown clean
+    products = Product.query.filter_by(shop_id=shop_id).order_by(Product.name.asc()).all()
+    return render_template('main/edit_product.html', products=products)
 
 #####
 
