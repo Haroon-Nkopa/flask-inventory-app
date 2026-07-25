@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+
+{% block title %}Modify Product | StockWise{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+  <div class="card card-custom">
+    <div class="card-header text-center border-secondary">
+      <h3>Modify Existing Product</h3>
+    </div>
+    
+    <div class="card-body">
+      <form id="editProductForm">
+        
+        <!-- 1. Searchable Dropdown List -->
+        <div class="mb-4 p-3 bg-secondary bg-opacity-10 border border-secondary rounded">
+          <label for="productSearch" class="form-label text-warning fw-bold">🔍 Search & Select Product</label>
+          <input class="form-control form-control-lg" list="productListOptions" id="productSearch" placeholder="Type to search product name...">
+          <datalist id="productListOptions">
+            {% for p in products %}
+              <!-- Data attributes cache item metrics cleanly inside the DOM structure -->
+              <option value="{{ p.name }}" 
+                      data-id="{{ p.id }}"
+                      data-category="{{ p.category }}"
+                      data-price="{{ p.price }}"
+                      data-size="{{ p.size }}"
+                      data-batch-size="{{ p.batch_size }}"
+                      data-batch-price="{{ p.batch_price }}"
+                      data-lower-bound="{{ p.lower_bound }}"
+                      data-batch-number="{{ p.batch_number }}">
+            {% endfor %}
+          </datalist>
+          <input type="hidden" id="edit_product_id" name="id">
+        </div>
+
+        <div id="formFieldsContainer" class="opacity-50 pointer-events-none">
+          <!-- 2. Product Name -->
+          <div class="mb-3">
+            <label for="name" class="form-label">Product Name</label>
+            <input type="text" class="form-control" name="name" id="name" required disabled>
+          </div>
+
+          <!-- 3. Category -->
+          <div class="mb-3">
+            <label for="category" class="form-label">Category</label>
+            <input type="text" class="form-control" name="category" id="category" disabled>
+          </div>
+
+          <!-- 4. Price -->
+          <div class="mb-3">
+            <label for="price" class="form-label">Price (R)</label>
+            <input type="number" step="0.01" class="form-control" name="price" id="price" required disabled>
+          </div>
+
+          <!-- 5. Size / Weight -->
+          <div class="mb-3">
+            <label for="size" class="form-label">Size / Weight</label>
+            <input type="text" class="form-control" name="size" id="size" disabled>
+          </div>
+
+          <!-- 6. Batch Size -->
+          <div class="mb-3">
+            <label for="batch_size" class="form-label">Batch Size (Units per Pack)</label>
+            <input type="number" class="form-control" name="batch_size" id="batch_size" min="1" disabled>
+          </div>
+
+          <!-- 7. Batch Price -->
+          <div class="mb-3">
+            <label for="batch_price" class="form-label">Batch Price (R)</label>
+            <input type="number" step="0.01" class="form-control" name="batch_price" id="batch_price" disabled>
+          </div>
+
+          <!-- 8. Threshold -->
+          <div class="mb-3">
+            <label for="lower_bound" class="form-label">Restock Threshold</label>
+            <input type="number" class="form-control" name="lower_bound" id="lower_bound" disabled>
+          </div>
+
+          <!-- 9. Batch Number -->
+          <div class="mb-3">
+            <label for="batch_number" class="form-label">Batch Number</label>
+            <input type="text" class="form-control" name="batch_number" id="batch_number" disabled>
+          </div>
+
+          <button type="submit" id="submitUpdateBtn" class="btn btn-warning w-100 fw-bold mt-3" disabled>Update Product Details</button>
+        </div>
+      </form>
+    </div>
+
+    <div class="card-footer text-center border-secondary">
+      <a href="{{ url_for('main.shop') }}" class="btn btn-outline-light btn-sm">← Back to Inventory</a>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+  <script src="{{ url_for('static', filename='js/edit_product.js') }}"></script>
+{% endblock %}
