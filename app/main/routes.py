@@ -124,6 +124,56 @@ def edit_product_page():
     products = Product.query.filter_by(shop_id=shop_id).order_by(Product.name.asc()).all()
     return render_template('main/edit_product.html', products=products)
 
+
+#modifying product attributes. 
+@main.route('/api/products/<int:product_id>', methods=['PUT'])
+@roles_required('owner', 'manager', 'employee')
+@shop_required
+def update_product_api(product_id):
+    shop_id = session.get('shop_id')
+    data = request.get_json()
+
+    if not data:
+        return jsonify({"error": "No data provided"}), 400
+
+    # 1. Look up the product and verify it belongs to this shop
+    product = Product.query.filter_by(id=product_id, shop_id=shop_id).first()
+    if not product:
+        return jsonify({"error": "Product not found or access denied"}), 404
+
+    # 2. Handle product renaming and prevent duplicate name conflicts
+    new_name = data.get('name', '').strip()
+    if new_name and new_name != product.name:
+        existing_product = Product.query.filter_by(name=new_name, shop_id=shop_id).first()
+        if existing_product:
+            return jsonify({"error": f"Another product named '{new_name}' already exists"}), 400
+        product.name = new_name
+
+    try:
+        # 3. Apply the updated details if present in JSON payload
+        if 'category' in data:
+            product.category = data.get('category', 'General').strip()
+        if 'price' in data:
+            product.price = float(data.get('price', 0))
+        if 'size' in data:
+            product.size = data.get('size', '').strip()
+        if 'batch_size' in data:
+            product.batch_size = int(data.get('batch_size', 1))
+        if 'batch_price' in data:
+            product.batch_price = float(data.get('batch_price', 0))
+        if 'lower_bound' in data:
+            product.lower_bound = int(data.get('lower_bound', 0))
+        if 'batch_number' in data:
+            product.batch_number = data.get('batch_number', '').strip()
+
+        db.session.commit()
+        return jsonify({"message": f"Product '{product.name}' updated successfully!"}), 200
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 500
+
+
 #####
 
 
