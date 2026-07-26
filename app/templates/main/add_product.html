@@ -6,6 +6,10 @@
 <div class="container mt-5">
   <!-- Interactive Entry Overlay (Hidden by Default) -->
   <div id="rapidEntryOverlay" class="d-none position-fixed top-0 start-0 w-100 h-100 bg-dark bg-opacity-95 d-flex flex-column align-items-center justify-content-center" style="z-index: 2000;">
+    
+    <!-- ⚠️ FIXED: Moved out of the summary card container so it stays visible during field transitions -->
+    <div id="rapidStatusAlert" class="text-center fw-bold fs-3 my-3 w-75 mx-auto d-none" style="transition: all 0.3s ease;"></div>
+
     <div id="rapidFieldContainer" class="text-center text-white mb-4 w-75 m-auto">
       <!-- Active input field gets cloned or moved here via JavaScript -->
     </div>
@@ -96,6 +100,8 @@
 <style>
   .rapid-zoomed fieldset, .rapid-zoomed label { font-size: 2.5rem !important; font-weight: bold; color: #ffc107; display: block; margin-bottom: 20px;}
   .rapid-zoomed input { font-size: 3rem !important; padding: 15px !important; text-align: center; border-radius: 10px; background: #fff !important; color: #000 !important;}
+  .animate-fade-in { animation: fadeIn 0.2s ease-in-out; }
+  @keyframes fadeIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
 </style>
 {% endblock %}
 
