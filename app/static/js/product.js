@@ -14,11 +14,22 @@ document.addEventListener('DOMContentLoaded', () => {
     // Target the actual inputs directly to prevent ID duplication issues
     const rapidInputs = Array.from(document.querySelectorAll(".rapid-field input"));
 
+    // Dynamically inject the status alert element into the overlay if it doesn't exist
+    let statusAlert = document.getElementById('rapidStatusAlert');
+    if (!statusAlert && overlay) {
+        statusAlert = document.createElement('div');
+        statusAlert.id = 'rapidStatusAlert';
+        statusAlert.className = 'text-center fw-bold fs-3 my-2 d-none w-75 m-auto';
+        statusAlert.style.transition = 'all 0.3s ease';
+        overlay.insertBefore(statusAlert, overlay.firstChild);
+    }
+
     // 1. Activate Rapid Flow Mode
     if (startBtn) {
         startBtn.addEventListener("click", function () {
             isRapidMode = true;
             currentFieldIndex = 0;
+            if (statusAlert) statusAlert.classList.add("d-none"); // Clear old messages
             overlay.classList.remove("d-none");
             summaryContainer.classList.add("d-none");
             fieldContainer.classList.remove("d-none");
@@ -136,23 +147,47 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 const result = await response.json();
                 if (response.ok) {
-                    alert(result.message);
-                    
                     if (isRapidMode) {
-                        // Reset background form values completely for product #2
+                        // 1. Show flashing green notification banner instead of alert
+                        if (statusAlert) {
+                            statusAlert.textContent = "✓ " + (result.message || "Product added successfully!");
+                            statusAlert.className = "text-success fw-bold fs-2 my-3 alert alert-success py-2 px-4 d-inline-block text-center";
+                            statusAlert.classList.remove('d-none');
+
+                            // Hide the confirmation message automatically after 1.5 seconds
+                            setTimeout(() => {
+                                statusAlert.classList.add('d-none');
+                            }, 1500);
+                        }
+
+                        // 2. Clear values out and start product #2 loop without blocking execution
                         addProductForm.reset();
                         currentFieldIndex = 0;
                         summaryContainer.classList.add("d-none");
                         fieldContainer.classList.remove("d-none");
-                        showField(currentFieldIndex); // Loops right back to Name field
+                        showField(currentFieldIndex); // Jump directly to Name input field
                     } else {
+                        // Standard fallback redirection for manual page-view clicks
                         window.location.href = "/shop"; 
                     }
                 } else {
-                    alert("Error: " + result.error);
+                    // Show error details directly inside the rapid overlay context instead of an alert window
+                    if (isRapidMode && statusAlert) {
+                        statusAlert.textContent = "❌ Error: " + (result.error || "Could not save product.");
+                        statusAlert.className = "text-danger fw-bold fs-3 my-3 alert alert-danger py-2 px-4 d-inline-block text-center";
+                        statusAlert.classList.remove('d-none');
+                    } else {
+                        alert("Error: " + result.error);
+                    }
                 }
             } catch (error) {
-                alert("Failed to connect to the server. Check your connection.");
+                if (isRapidMode && statusAlert) {
+                    statusAlert.textContent = "❌ Connection failed. Check server status.";
+                    statusAlert.className = "text-danger fw-bold fs-3 my-3 alert alert-danger py-2 px-4 d-inline-block text-center";
+                    statusAlert.classList.remove('d-none');
+                } else {
+                    alert("Failed to connect to the server. Check your connection.");
+                }
             }
         });
     }
