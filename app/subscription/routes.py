@@ -17,7 +17,7 @@ def billing():
 @subscription.route('/process/', methods=['POST'])
 def process_subscription():
 
-    shop_name = request.form.get('shop_name', '').strip()
+    shop_name = request.form.get('shop_name', '').strip().title()
     owner_name = request.form.get('owner_name', '').strip()
     phone_number = request.form.get('phone_number', '').strip()
     password = request.form.get('password', '').strip()

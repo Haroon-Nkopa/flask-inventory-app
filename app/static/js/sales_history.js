@@ -1,86 +1,96 @@
 document.addEventListener('DOMContentLoaded', function() {
-    loadSalesHistory();
+    const tableSelect = document.getElementById('stock-table-select');
+    
+    // Initial load with default "live" type
+    loadStockHistory(tableSelect.value);
+
+    // Watch for dropdown changes to re-fetch relevant records
+    tableSelect.addEventListener('change', function() {
+        loadStockHistory(this.value);
+    });
 });
 
-async function loadSalesHistory() {
-    const accordion = document.getElementById('salesAccordion');
+async function loadStockHistory(reportType) {
+    const headerRow = document.getElementById('history-header');
+    const bodyRow = document.getElementById('history-body');
+    
+    // Display an intermediate loading state while shifting records
+    bodyRow.innerHTML = `<tr><td colspan="100%" class="text-center py-4">Updating inventory view...</td></tr>`;
     
     try {
-        const response = await fetch(SALES_CONFIG.apiUrl);
-        if (!response.ok) throw new Error("Failed to fetch sales");
+        // Appends select value to url structure -> e.g., /api/stock-history?type=daily
+        const response = await fetch(`/api/stock-history?type=${reportType}`);
+        if (!response.ok) throw new Error("Failed to fetch stock records");
         
         const data = await response.json();
-        const sales = data.sales;
-
-        if (sales.length === 0) {
-            accordion.innerHTML = `
-                <div class="card p-5 text-center">
-                    <div class="opacity-50">
-                        <h1 class="display-1">📭</h1>
-                        <h4>No sales recorded yet</h4>
-                        <a href="/pos" class="btn btn-primary mt-3">Go to POS Terminal</a>
-                    </div>
-                </div>`;
+        
+        // Handle empty datasets gracefully
+        if (!data.records || data.records.length === 0) {
+            headerRow.innerHTML = '';
+            bodyRow.innerHTML = `
+                <tr>
+                    <td colspan="100%" class="text-center text-muted py-5">
+                        <span class="fs-2 d-block mb-2">📭</span>
+                        No entries recorded for this view.
+                    </td>
+                </tr>`;
             return;
         }
 
-        // Clear loading spinner and build accordion
-        accordion.innerHTML = sales.map(sale => `
-            <div class="accordion-item">
-              <h2 class="accordion-header">
-                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#sale${sale.id}">
-                  <div class="d-flex justify-content-between align-items-center w-100 me-3">
-                    <div>
-                      <span class="fw-bold text-success">#${sale.id}</span>
-                      <span class="ms-3 text-secondary">${sale.timestamp}</span>
-                    </div>
-                    <div class="text-end">
-                      <span class="me-3 status-badge">Paid</span>
-                      <span class="fs-5 fw-bold text-success">R ${sale.total.toFixed(2)}</span>
-                    </div>
-                  </div>
-                </button>
-              </h2>
-              <div id="sale${sale.id}" class="accordion-collapse collapse" data-bs-parent="#salesAccordion">
-                <div class="accordion-body">
-                  <div class="table-responsive">
-                    <table class="table table-dark table-hover align-middle">
-                      <thead class="text-secondary border-bottom border-secondary">
-                        <tr>
-                          <th>Product Item</th>
-                          <th class="text-center">Qty</th>
-                          <th class="text-end">Unit Price</th>
-                          <th class="text-end">Subtotal</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        ${sale.items.map(item => `
-                          <tr>
-                            <td>
-                              <div class="fw-bold">${item.product_name}</div>
-                              <small class="text-muted">${item.category}</small>
-                            </td>
-                            <td class="text-center">${item.quantity}</td>
-                            <td class="text-end">R ${item.unit_price.toFixed(2)}</td>
-                            <td class="text-end fw-bold">R ${item.total_price.toFixed(2)}</td>
-                          </tr>
-                        `).join('')}
-                      </tbody>
-                      <tfoot>
-                        <tr class="border-top border-secondary">
-                          <td colspan="3" class="text-end text-secondary uppercase fw-bold pt-3">Total Amount:</td>
-                          <td class="text-end text-success fs-5 fw-bold pt-3">R ${sale.total.toFixed(2)}</td>
-                        </tr>
-                      </tfoot>
-                    </table>
-                  </div>
-                </div>
-              </div>
-            </div>
-        `).join('');
+        // 1. Build and Inject Headers Based on Report Type Archetype
+        if (reportType === 'live') {
+            headerRow.innerHTML = `
+                <tr>
+                    <th>Product Name</th>
+                    <th>Category</th>
+                    <th>Size</th>
+                    <th class="text-center">Live Stock Balance</th>
+                    <th class="text-center">Restock Alert Threshold</th>
+                </tr>`;
+                
+            // Render rows targeting the strict 1-to-1 live attributes
+            bodyRow.innerHTML = data.records.map(record => `
+                <tr>
+                    <td class="fw-bold text-light">${record.product_name}</td>
+                    <td><span class="badge bg-secondary">${record.category}</span></td>
+                    <td>${record.size || 'N/A'}</td>
+                    <td class="text-center fw-bold ${record.quantity <= record.lower_bound ? 'text-danger' : 'text-success'}">
+                        ${record.quantity}
+                    </td>
+                    <td class="text-center text-muted">${record.lower_bound}</td>
+                </tr>
+            `).join('');
+            
+        } else {
+            // Shared structure for 'daily' and 'audited' timeline arrays
+            headerRow.innerHTML = `
+                <tr>
+                    <th>Log Date</th>
+                    <th>Product Name</th>
+                    <th>Category</th>
+                    <th class="text-center">Recorded Quantity</th>
+                    ${reportType === 'audited' ? '<th>Audit Notes / Discrepancy</th>' : ''}
+                </tr>`;
+                
+            bodyRow.innerHTML = data.records.map(record => `
+                <tr>
+                    <td class="text-secondary">${record.date}</td>
+                    <td class="fw-bold text-light">${record.product_name}</td>
+                    <td><span class="badge bg-secondary">${record.category}</span></td>
+                    <td class="text-center fw-bold text-info">${record.quantity}</td>
+                    ${reportType === 'audited' ? `<td><small class="text-muted">${record.notes || 'No notes'}</small></td>` : ''}
+                </tr>
+            `).join('');
+        }
 
     } catch (error) {
-        accordion.innerHTML = '<p class="text-center text-danger py-5">Error loading history. Check your connection.</p>';
-        console.error(error);
+        headerRow.innerHTML = '';
+        bodyRow.innerHTML = `
+            <tr>
+                <td colspan="100%" class="text-center text-danger py-5">
+                    ⚠️ Error fetching history. Please refresh or try again.
+                </td>
+            </tr>`;
+        console.error("Stock View Error:", error);
     }
 }

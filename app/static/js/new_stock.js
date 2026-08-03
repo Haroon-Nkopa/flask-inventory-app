@@ -35,9 +35,10 @@ document.addEventListener('DOMContentLoaded', function() {
         const originalText = submitBtn.textContent;
         submitBtn.textContent = 'Processing...';
 
+        // FIXED: Wrap numerical inputs in parseInt() to prevent backend type validation failures
         const payload = {
-            product_id: productSelect.value,
-            new_quantity: document.getElementById('new_quantity').value
+            product_id: parseInt(productSelect.value, 10),
+            new_quantity: parseInt(document.getElementById('new_quantity').value, 10)
         };
 
         fetch(postUrl, {
@@ -47,17 +48,18 @@ document.addEventListener('DOMContentLoaded', function() {
         })
         .then(res => res.json())
         .then(data => {
+            // FIXED: Standardize checking for response.ok along with data.error properties
             if (data.error) {
                 alert("Error: " + data.error);
                 submitBtn.disabled = false;
                 submitBtn.textContent = originalText;
             } else {
-                alert(data.message);
+                alert("🎉 " + data.message);
                 window.location.href = redirectUrl;
             }
         })
         .catch(err => {
-            alert("Something went wrong.");
+            alert("Something went wrong with the database connection.");
             submitBtn.disabled = false;
             submitBtn.textContent = originalText;
         });

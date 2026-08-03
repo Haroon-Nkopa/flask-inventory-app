@@ -38,13 +38,15 @@
               <tr>
                 <th>Product</th>
                 <th>Category</th>
+                <th>Stock</th> <!-- FIXED: Added explicit header column matching your script changes -->
                 <th>Price</th>
                 <th class="text-end">Action</th>
               </tr>
             </thead>
             <tbody id="productTable">
               <tr>
-                <td colspan="4" class="text-center py-5">
+                <!-- FIXED: Increased colspan to 5 to prevent visual grid breaking on load -->
+                <td colspan="5" class="text-center py-5">
                   <div class="spinner-border text-success" role="status"></div>
                   <p class="mt-2 text-muted">Loading products...</p>
                 </td>
