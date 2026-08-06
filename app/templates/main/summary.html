@@ -36,6 +36,43 @@
     </div>
   </div>
 
+    <div class="mb-4 text-start">
+    <!-- Audit Control Trigger -->
+    <button class="btn btn-outline-info" id="toggle-audit-btn" onclick="toggleAuditView()">
+      🔍 Analyze Inventory Discrepancies
+    </button>
+
+    <!-- Discrepancy Display Container -->
+    <div id="audit-discrepancy-container" class="card bg-dark border-info overflow-hidden mt-3 d-none">
+      <div class="card-header bg-info text-dark fw-bold d-flex justify-content-between align-items-center">
+        <span>🚨 Real-Time Audit Discrepancies</span>
+        <button class="btn-close btn-close-white" onclick="toggleAuditView()" aria-label="Close"></button>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-dark table-striped table-hover align-middle mb-0 text-center">
+          <thead>
+            <tr>
+              <th>Product ID</th>
+              <th class="text-start">Product Name</th>
+              <th>Live Quantity</th>
+              <th>Audited Quantity</th>
+              <th>Variance Difference</th>
+            </tr>
+          </thead>
+          <tbody id="audit-discrepancy-body">
+            <tr>
+              <td colspan="5" class="text-muted py-4">
+                <div class="spinner-border spinner-border-sm text-info me-2" role="status"></div>
+                Pulling audit ledger metrics...
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+
   <div id="summary-alert" class="alert alert-success d-none"></div>
 
   <!-- Key Metrics Row (Revenue & Potential Profit) -->
@@ -129,6 +166,8 @@
 
 {% block scripts %}
 <script src="https://jsdelivr.net"></script>
-<!-- This cleanly links directly to your isolated JS script file -->
 <script src="{{ url_for('static', filename='js/summary.js') }}"></script>
+<!-- New Isolated Script Architecture Component -->
+<script src="{{ url_for('static', filename='js/audit.js') }}"></script>
 {% endblock %}
+

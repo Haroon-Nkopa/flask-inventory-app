@@ -1,5 +1,5 @@
 #import main blueprint
-from flask_login import current_user, logout_user
+from flask_login import current_user, logout_user, login_required
 from . import main
 from flask import render_template, request, redirect, url_for, flash, session, send_file, jsonify 
 from ..models import Product, LiveInventory, DailyInventorySnapshot, PhysicalInventoryCount, Shop, Sale, SaleItem
@@ -8,9 +8,9 @@ from datetime import date , datetime, timedelta  # Add this import
 from ..decorators import shop_required, roles_required, payment_required
 from app.utils.stock_sheet_pdf import generate_stock_sheet_pdf
 from sqlalchemy import func
-
-
-#at shop decorator 
+from sqlalchemy.orm import joinedload
+from collections import defaultdict
+from .helper import get_inventory_discrepancies
 
 
 
@@ -44,6 +44,7 @@ def shop():
 #a route that renders add_user.html
 @main.route('/add_user')
 @shop_required
+@login_required
 @roles_required('owner', 'manager')
 def add_user():
     return render_template('main/add_user.html')
@@ -57,6 +58,7 @@ def add_user():
 # 1. This just serves the HTML page shell
 @main.route('/add')
 @roles_required('owner', 'manager', 'employee')
+@login_required
 @shop_required
 def add_product():
     return render_template('main/add_product.html')
@@ -66,6 +68,7 @@ def add_product():
 
 # 2. This is the REST API endpoint that does the work
 @main.route('/api/products', methods=['POST'])
+@login_required
 @roles_required('owner', 'manager', 'employee')
 @shop_required
 def create_product_api():
@@ -115,6 +118,7 @@ def create_product_api():
 #edit product details
 @main.route('/edit-product', methods=['GET'])
 @roles_required('owner', 'manager', 'employee')
+@login_required
 @shop_required
 def edit_product_page():
     shop_id = session.get('shop_id')
@@ -127,6 +131,7 @@ def edit_product_page():
 #modifying product attributes. 
 @main.route('/api/products/<int:product_id>', methods=['PUT'])
 @roles_required('owner', 'manager', 'employee')
+@login_required
 @shop_required
 def update_product_api(product_id):
     shop_id = session.get('shop_id')
@@ -180,6 +185,7 @@ def update_product_api(product_id):
 # 1. The Shell Route
 @main.route('/stock-history')
 @payment_required
+@login_required
 @roles_required('owner', 'manager')
 @shop_required
 def stock_history():
@@ -188,6 +194,7 @@ def stock_history():
 
 @main.route('/api/stock-history')
 @payment_required
+@login_required
 @roles_required('owner', 'manager')
 @shop_required
 def get_stock_history_api():
@@ -267,6 +274,7 @@ def get_stock_history_api():
 ######
 
 @main.route('/take-stock')
+@login_required
 @payment_required
 @roles_required('owner', 'manager', 'employee', 'auditor')
 @shop_required
@@ -277,6 +285,7 @@ def take_stock():
 # API to GET the product list for the table
 @main.route('/api/stock-take-products', methods=['GET'])
 @payment_required
+@login_required
 @roles_required('owner', 'manager', 'employee', 'auditor')
 @shop_required
 def get_stock_take_products():
@@ -287,16 +296,12 @@ def get_stock_take_products():
 
 @main.route('/api/take-stock', methods=['POST'])
 @payment_required
+@login_required
 @roles_required('owner', 'manager', 'employee', 'auditor')
 @shop_required
 def submit_stock_api():
     shop_id = session.get('shop_id')
-    user_id = session.get('user_id') # Systematically extract current authenticated user ID
     
-    # Safety fallback rule if login session data didn't capture the ID securely
-    if not user_id:
-        return jsonify({"error": "User identity could not be verified. Please log in again."}), 401
-
     products = Product.query.filter_by(shop_id=shop_id).all()
     today_date = date.today()
     data = request.get_json()
@@ -321,21 +326,8 @@ def submit_stock_api():
     for product in products:
         qty_input = int(data.get(str(product.id), 0))
 
-        previous_record = PhysicalInventoryCount.query.filter(
-            PhysicalInventoryCount.product_id == product.id,
-            PhysicalInventoryCount.date < today_date
-        ).order_by(PhysicalInventoryCount.date.desc()).first()
-
-        if previous_record and qty_input > previous_record.counted_quantity:
-            problematic.append(f"{product.name} (Prev: {previous_record.counted_quantity}, New: {qty_input})")
-        
         stock_to_save.append((product.id, qty_input))
 
-    if problematic:
-        return jsonify({
-            "error": "Physical stock count cannot be greater than previous records.",
-            "details": problematic
-        }), 400
 
     # 3. Save directly into your updated schema matrix mappings
     try:
@@ -347,7 +339,7 @@ def submit_stock_api():
                 product_id=p_id, 
                 date=today_date, 
                 counted_quantity=qty,
-                user_id=user_id, # Authenticated User Tracking Key
+                user_id=current_user.username, # Authenticated User Tracking Key
                 notes=item_note  # Captured Notes Text Mapping String
             )
             db.session.add(new_audit)
@@ -361,49 +353,71 @@ def submit_stock_api():
 
 #####
 
+@main.route('/api/inventory/discrepancies', methods=['GET'])
+@login_required
+@roles_required('owner')
+@shop_required
+def get_discrepancies_api():
+    """
+    Executes the helper query logic to calculate variances between
+    the latest physical count updates and standard real-time stock balances.
+    """
+    shop_id = session.get('shop_id')
+    
+    try:
+        # Call the standalone backend engine utility from helper.py
+        mismatches = get_inventory_discrepancies(shop_id)
+        
+        return jsonify({
+            "status": "success",
+            "count": len(mismatches),
+            "discrepancies": mismatches
+        }), 200
+        
+    except Exception as e:
+        # Prevent database locks by running a clean engine error catch fallback
+        return jsonify({
+            "status": "error",
+            "message": "Failed to parse underlying database query streams."
+        }), 500
+
 
 
 # UI Route - Stays light, just serves the dashboard shell
 @main.route('/summary')
+@login_required
 @payment_required
 @roles_required('owner')
 @shop_required
 def summary():
     return render_template('main/summary.html')
 
-
-# 1. LIVE SUMMARY ENDPOINT (Real-Time metrics from 'sale', 'sale_item' and 'live_inventory')
 @main.route('/api/summary/live', methods=['GET'])
 @payment_required
+@login_required
 @roles_required('owner')
 @shop_required
 def get_live_summary_api():
     shop_id = session.get('shop_id')
     today_date = date.today()
 
-    # Calculate real live revenue from SaleItem table joining back to Shop context
-    today_revenue = db.session.query(func.sum(SaleItem.total_price))\
-        .join(Sale)\
-        .filter(Sale.shop_id == shop_id, func.date(Sale.timestamp) == today_date)\
-        .scalar() or 0.0
+    # 1. FETCH ALL PRODUCTS & LIVE INVENTORY IN ONE QUERY (Avoids N+1 lazy loading)
+    products_with_inv = db.session.query(Product)\
+        .outerjoin(Product.live_inventory)\
+        .filter(Product.shop_id == shop_id)\
+        .all()
 
-    products = Product.query.filter_by(shop_id=shop_id).all()
-    
+    # Initialize data metrics
     stock_out = []
-    sales_data = []
     pot_rev, pot_cost = 0.0, 0.0
-
-    # Process live metrics per product utilizing actual 1-to-1 operational relation hooks
-    for p in products:
-        # Respect your strict 1-to-1 'live_inventory' relationship hook
+    
+    for p in products_with_inv:
         qty = p.live_inventory.quantity if p.live_inventory else 0
-        
-        # Calculate potential profit margins on current remaining shelf stock
         unit_cost = (p.batch_price / p.batch_size) if (p.batch_price and p.batch_size) else 0.0
+        
         pot_rev += (qty * (p.price or 0.0))
         pot_cost += (qty * unit_cost)
         
-        # Check if item is sold out right now
         if qty == 0:
             stock_out.append({
                 "name": p.name,
@@ -411,39 +425,60 @@ def get_live_summary_api():
                 "price": float(p.price or 0.0)
             })
 
-        # Fetch today's actual sales volume from itemized transactional logs
-        sold_today = db.session.query(func.sum(SaleItem.quantity))\
-            .join(Sale)\
-            .filter(SaleItem.product_id == p.id, Sale.shop_id == shop_id, func.date(Sale.timestamp) == today_date)\
-            .scalar() or 0
-            
-        if sold_today > 0:
-            rev_today = db.session.query(func.sum(SaleItem.total_price))\
-                .join(Sale)\
-                .filter(SaleItem.product_id == p.id, Sale.shop_id == shop_id, func.date(Sale.timestamp) == today_date)\
-                .scalar() or 0.0
+    # 2. GROUPED SALES METRICS (Fetches total quantity and revenue for ALL products at once)
+    sales_query = db.session.query(
+            SaleItem.product_id,
+            Product.name,
+            Product.category,
+            func.sum(SaleItem.quantity).label('sold_qty'),
+            func.sum(SaleItem.total_price).label('revenue')
+        )\
+        .join(Sale, SaleItem.sale_id == Sale.id)\
+        .join(Product, SaleItem.product_id == Product.id)\
+        .filter(Sale.shop_id == shop_id, func.date(Sale.timestamp) == today_date)\
+        .group_by(SaleItem.product_id, Product.name, Product.category)\
+        .all()
 
-            sales_data.append({
-                'name': p.name,
-                'category': p.category or "-",
-                'sold_qty': int(sold_today),
-                'revenue': float(rev_today)
-            })
+    sales_data = []
+    today_revenue = 0.0
 
-    # Render a sliding 7-day live revenue trend line chart
+    for product_id, name, category, sold_qty, revenue in sales_query:
+        sold_qty = int(sold_qty or 0)
+        revenue = float(revenue or 0.0)
+        today_revenue += revenue  # Accumulate today's revenue directly from product sums
+        
+        sales_data.append({
+            'name': name,
+            'category': category or "-",
+            'sold_qty': sold_qty,
+            'revenue': revenue
+        })
+
+    # 3. GROUPED 7-DAY TREND (Fetches historical values in a single database aggregation)
+    start_date = today_date - timedelta(days=6)
+    trend_query = db.session.query(
+            func.date(Sale.timestamp).label('sale_date'),
+            func.sum(SaleItem.total_price).label('day_rev')
+        )\
+        .join(Sale, SaleItem.sale_id == Sale.id)\
+        .filter(Sale.shop_id == shop_id, func.date(Sale.timestamp) >= start_date)\
+        .group_by(func.date(Sale.timestamp))\
+        .all()
+
+    # Map database trend results into a dictionary lookup
+    # Note: Depending on your DB engine, 'sale_date' may return a date object or a string.
+    trend_map = {str(row.sale_date): float(row.day_rev or 0.0) for row in trend_query}
+
     chart_labels, chart_values = [], []
     for d in range(6, -1, -1):
         target_day = today_date - timedelta(days=d)
-        day_rev = db.session.query(func.sum(SaleItem.total_price))\
-            .join(Sale)\
-            .filter(Sale.shop_id == shop_id, func.date(Sale.timestamp) == target_day)\
-            .scalar() or 0.0
         chart_labels.append(target_day.strftime("%A, %d %B"))
-        chart_values.append(round(float(day_rev), 2))
+        # Match against our trend lookup dictionary
+        chart_values.append(round(trend_map.get(str(target_day), 0.0), 2))
 
     return jsonify({
         "summary_type": "Live Summary (Today)",
-        "total_revenue": float(today_revenue),
+        "total_revenue": round(today_revenue, 2),
         "potential_profit": round(pot_rev - pot_cost, 2),
         "stock_out": stock_out,
         "fast_selling": sorted(sales_data, key=lambda x: x['sold_qty'], reverse=True)[:10],
@@ -452,9 +487,11 @@ def get_live_summary_api():
     }), 200
 
 
+
 # 2. HISTORICAL DAILY COUNT SUMMARY (Utilises 'daily_inventory_snapshot' model)
 @main.route('/api/summary/daily-count', methods=['GET'])
 @payment_required
+@login_required
 @roles_required('owner')
 @shop_required
 def get_daily_count_summary_api():
@@ -529,6 +566,7 @@ def get_daily_count_summary_api():
 # 3. AUDITED SUMMARY ENDPOINT (Utilises 'physical_inventory_count' model)
 @main.route('/api/summary/audited', methods=['GET'])
 @payment_required
+@login_required
 @roles_required('owner')
 @shop_required
 def get_audited_summary_api():
@@ -583,6 +621,7 @@ def logout():
 
 #######
 @main.route('/print-stock-sheet')
+@login_required
 @roles_required('owner', 'manager','employee', 'auditor')
 @shop_required
 def print_stock_sheet():
@@ -610,6 +649,7 @@ def print_stock_sheet():
 
 @main.route('/pos')
 @payment_required
+@login_required
 @roles_required('owner', 'manager', 'employee', 'auditor')
 @shop_required
 def pos():
@@ -618,6 +658,7 @@ def pos():
 
 # 1. GET POS PRODUCTS - Now checks LiveInventory to return real stock quantities
 @main.route('/api/pos/products', methods=['GET'])
+@login_required
 @payment_required
 @roles_required('owner', 'manager', 'employee', 'auditor')
 @shop_required
@@ -644,6 +685,7 @@ def get_pos_products():
 
 # 2. POST POS CHECKOUT - Now updates LiveInventory directly and cuts out all old snapshots
 @main.route('/api/pos/checkout', methods=['POST'])
+@login_required
 @payment_required
 @roles_required('owner', 'manager', 'employee', 'auditor')
 @shop_required
@@ -762,6 +804,7 @@ def pos_checkout_api():
 
 
 @main.route('/sales-history')
+@login_required
 @payment_required
 @roles_required('owner', 'manager', 'auditor')
 @shop_required
@@ -771,6 +814,7 @@ def sales_history():
 
 
 @main.route('/api/sales-history', methods=['GET'])
+@login_required
 @payment_required
 @roles_required('owner', 'manager', 'auditor')
 @shop_required
@@ -820,6 +864,7 @@ def check_session():
 
 # 1. Add the UI Route view handler to your main routes file
 @main.route('/new-stocks')
+@login_required
 @roles_required('owner', 'manager', 'employee', 'auditor')
 @shop_required
 def new_stocks():
@@ -828,6 +873,7 @@ def new_stocks():
 
 # Add this API endpoint to your main blueprint routes file
 @main.route('/api/products-list', methods=['GET'])
+@login_required
 @roles_required('owner', 'manager', 'employee', 'auditor')
 @shop_required
 def get_products_list():
@@ -843,6 +889,7 @@ def get_products_list():
 
 # Add this API endpoint to your main blueprint routes file (app/main/routes.py)
 @main.route('/api/new-stocks', methods=['POST'])
+@login_required
 @roles_required('owner', 'manager', 'employee', 'auditor')
 @shop_required
 def add_new_stock_api():

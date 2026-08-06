@@ -1,5 +1,5 @@
 from flask import render_template, request, redirect, url_for, flash, session
-from flask_login import current_user, login_user, logout_user
+from flask_login import current_user, login_user, logout_user, login_required
 from werkzeug.security import check_password_hash
 from ..models import User
 from . import auth_bp
@@ -18,9 +18,6 @@ def login():
         if next_endpoint:
             return redirect(url_for(next_endpoint))
         
-
-        
-
     if request.method == 'POST':
         username = request.form.get('username', '').strip()
         password = request.form.get('password', '').strip()
