@@ -17,21 +17,26 @@ function toggleAuditView() {
 }
 
 /**
- * Communicates with the backend route API to fetch discrepancy objects
- * and handles UI table population dynamically.
+ * Communicates with the backend route API to fetch discrepancy metrics
+ * and isolates timeline blocks on row click bindings.
  */
 function fetchInventoryDiscrepancies() {
     const tableBody = document.getElementById('audit-discrepancy-body');
-    
-    // Set initial loading state
+    const tableContainer = document.getElementById('audit-discrepancy-container');
+
+    // Display basic loader state
     tableBody.innerHTML = `
         <tr>
-            <td colspan="5" class="text-info py-4">
+            <td colspan="5" class="text-info py-4 text-center">
                 <div class="spinner-border spinner-border-sm me-2" role="status"></div>
-                Analyzing live ledgers against physical count sheets...
+                Analyzing live balances against physical count ledger tracks...
             </td>
         </tr>
     `;
+
+    // Remove prior lookup blocks if any
+    const oldTimeline = document.getElementById('audit-timeline-narrative-block');
+    if (oldTimeline) oldTimeline.remove();
 
     fetch('/api/inventory/discrepancies', {
         method: 'GET',
@@ -41,18 +46,20 @@ function fetchInventoryDiscrepancies() {
         }
     })
     .then(response => {
-        if (!response.ok) {
-            throw new Error(`Server returned error HTTP state: ${response.status}`);
-        }
+        if (!response.ok) throw new Error(`HTTP Error Status: ${response.status}`);
         return response.json();
     })
     .then(data => {
-        tableBody.innerHTML = ''; // Clear out the loading spinner row
+        tableBody.innerHTML = ''; 
 
-        if (!data.discrepancies || data.discrepancies.length === 0) {
+        // Safely parse out tabular data regardless of whether it's an array or key-value object
+        const records = Array.isArray(data.tabular_data) ? data.tabular_data : 
+                        Object.keys(data.tabular_data).map(id => ({ product_id: id, ...data.tabular_data[id] }));
+
+        if (records.length === 0) {
             tableBody.innerHTML = `
                 <tr>
-                    <td colspan="5" class="text-success py-4 fw-bold">
+                    <td colspan="5" class="text-success py-4 fw-bold text-center">
                         ✅ Perfect Match! All physical counts match your live system balances.
                     </td>
                 </tr>
@@ -60,31 +67,98 @@ function fetchInventoryDiscrepancies() {
             return;
         }
 
-        // Render every record variance row securely
-        data.discrepancies.forEach(item => {
+        // 1. RENDER TABULAR RECORDS WITH CLICK EVENT TRAPS
+        records.forEach(item => {
+            // Guarantee layout variables exist
+            const liveQty = item.live_quantity ?? 0;
+            const auditedQty = item.audited_quantity ?? 0;
+            const difference = auditedQty - liveQty;
+
             const row = document.createElement('tr');
+            row.style.cursor = 'pointer';
+            row.title = `Click to inspect ${item.product_name} timelines`;
+            row.setAttribute('data-product-id', item.product_id);
             
-            // Highlight negative vs positive variances dynamically
-            const badgeClass = item.difference < 0 ? 'badge bg-danger' : 'badge bg-warning text-dark';
-            const signPrefix = item.difference > 0 ? '+' : '';
+            const badgeClass = difference < 0 ? 'badge bg-danger' : 'badge bg-warning text-dark';
+            const signPrefix = difference > 0 ? '+' : '';
 
             row.innerHTML = `
                 <td><code>#${item.product_id}</code></td>
                 <td class="text-start fw-semibold">${escapeHtml(item.product_name)}</td>
-                <td>${item.live_quantity}</td>
-                <td>${item.audited_quantity}</td>
+                <td>${liveQty}</td>
+                <td>${auditedQty}</td>
                 <td>
-                    <span class="${badgeClass}">${signPrefix}${item.difference}</span>
+                    <span class="${badgeClass}">${signPrefix}${difference}</span>
                 </td>
             `;
+
+            row.addEventListener('click', function() {
+                document.querySelectorAll('#audit-discrepancy-body tr').forEach(r => r.classList.remove('table-info', 'text-dark'));
+                this.classList.add('table-info', 'text-dark');
+                
+                // Pack full item details cleanly down to the click listener
+                showSpecificProductTimeline({
+                    product_id: item.product_id,
+                    product_name: item.product_name
+                });
+            });
+
             tableBody.appendChild(row);
         });
+
+        // 2. BUILD TIMELINE ELEMENTS
+        const timelineBlock = document.createElement('div');
+        timelineBlock.id = 'audit-timeline-narrative-block';
+        timelineBlock.className = 'card-body border-top border-secondary p-3 text-start bg-dark';
+
+        let timelineHtml = `
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <h5 class="text-info mb-0">🕒 Operational Employee Sales Audit Trails</h5>
+                <div id="timeline-action-container"></div>
+            </div>
+            <p id="timeline-placeholder-text" class="text-secondary small mb-3">💡 Click any product row above to isolate its precise timeline narrative text.</p>
+            
+            <div id="merge-form-panel" class="d-none border border-warning rounded p-3 mb-3 bg-black"></div>
+        `;
+
+        records.forEach(pMeta => {
+            const prodName = pMeta.product_name;
+            const prodId = pMeta.product_id;
+            const phrases = data.timeline_data ? (data.timeline_data[prodName] || []) : [];
+
+            timelineHtml += `
+                <div class="product-timeline-wrapper d-none" id="timeline-prod-${prodId}">
+                    <strong class="text-warning small text-uppercase">📦 ${escapeHtml(prodName)}</strong>
+                    <ul class="list-group list-group-flush mt-1 mb-2 ps-2">
+            `;
+
+            if (phrases.length === 0) {
+                timelineHtml += `
+                    <li class="list-group-item bg-dark text-muted border-0 py-1 small ps-0 fst-italic">
+                        No sales transactions were logged after this product's last count stamp.
+                    </li>
+                `;
+            } else {
+                phrases.forEach(phrase => {
+                    timelineHtml += `
+                        <li class="list-group-item bg-dark text-light border-0 py-1 small ps-0">
+                            • ${escapeHtml(phrase)}
+                        </li>
+                    `;
+                });
+            }
+
+            timelineHtml += `</ul></div>`;
+        });
+
+        timelineBlock.innerHTML = timelineHtml;
+        tableContainer.appendChild(timelineBlock);
     })
     .catch(error => {
-        console.error('Audit Fetch Error:', error);
+        console.error('Audit Fetch Failure Trace:', error);
         tableBody.innerHTML = `
             <tr>
-                <td colspan="5" class="text-danger py-4">
+                <td colspan="5" class="text-danger py-4 text-center">
                     ⚠️ Failed to run discrepancy report. Check system engine console.
                 </td>
             </tr>
@@ -93,16 +167,132 @@ function fetchInventoryDiscrepancies() {
 }
 
 /**
- * Utility tool to prevent XSS exploits when rendering raw input names to DOM
+ * Isolates and changes display states for the target timeline and binds the action panel
  */
-function escapeHtml(string) {
-    return String(string).replace(/[&<>"']/g, function (s) {
-        return {
-            '&': '&amp;',
-            '<': '&lt;',
-            '>': '&gt;',
-            '"': '&quot;',
-            "'": '&#39;'
-        }[s];
+function showSpecificProductTimeline(item) {
+    const placeholder = document.getElementById('timeline-placeholder-text');
+    if (placeholder) placeholder.classList.add('d-none');
+
+    const formPanel = document.getElementById('merge-form-panel');
+    if (formPanel) formPanel.classList.add('d-none');
+
+    document.querySelectorAll('.product-timeline-wrapper').forEach(block => {
+        block.classList.add('d-none');
+    });
+
+    const targetBlock = document.getElementById(`timeline-prod-${item.product_id}`);
+    if (targetBlock) {
+        targetBlock.classList.remove('d-none');
+        targetBlock.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    const actionContainer = document.getElementById('timeline-action-container');
+    if (actionContainer) {
+        actionContainer.innerHTML = `
+            <button class="btn btn-sm btn-warning fw-bold shadow-sm" id="initiate-merge-btn">
+                🛠️ Merge Variance for ${escapeHtml(item.product_name)}
+            </button>
+        `;
+
+        document.getElementById('initiate-merge-btn').addEventListener('click', () => {
+            renderMergeForm(item);
+        });
+    }
+}
+
+/**
+ * Renders the internal interactive override framework form within the narrative panel
+ */
+function renderMergeForm(item) {
+    const formPanel = document.getElementById('merge-form-panel');
+    
+    document.querySelectorAll('.product-timeline-wrapper').forEach(block => block.classList.add('d-none'));
+    
+    formPanel.innerHTML = `
+        <h6 class="text-warning mb-2 fw-bold">🔄 Reconcile Discrepancy Flow</h6>
+        <p class="text-light small mb-3">
+            ⚠️ Please recount the physical stock layout of <b class="text-info">${escapeHtml(item.product_name)}</b> to discover actual final inventory assets before saving.
+        </p>
+        
+        <form id="variance-submit-form">
+            <div class="mb-3">
+                <label class="form-label text-secondary small fw-bold">ACTUAL ${escapeHtml(item.product_name).toUpperCase()} NUMBER IN STOCK:</label>
+                <input type="number" class="form-control bg-dark text-white border-secondary" id="merge-actual-count" required min="0" placeholder="Enter true count value">
+            </div>
+            
+            <div class="mb-3">
+                <label class="form-label text-secondary small fw-bold">REASON FOR MERGING / OVERRIDING:</label>
+                <textarea class="form-control bg-dark text-white border-secondary" id="merge-reason" rows="2" required placeholder="E.g., Spillage, tracking offset, theft, unlogged transaction"></textarea>
+            </div>
+            
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-sm btn-success px-3 fw-bold">Confirm Database Merge Action</button>
+                <button type="button" class="btn btn-sm btn-outline-secondary text-light" id="cancel-merge-btn">Cancel</button>
+            </div>
+        </form>
+    `;
+
+    formPanel.classList.remove('d-none');
+    formPanel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        // Handle form submissions dynamically
+    document.getElementById('variance-submit-form').addEventListener('submit', function(e) {
+        executeVarianceMerge(e, item.product_id);
+    });
+
+    document.getElementById('cancel-merge-btn').addEventListener('click', () => {
+        formPanel.classList.add('d-none');
+        document.getElementById(`timeline-prod-${item.product_id}`).classList.remove('d-none');
     });
 }
+
+/**
+ * Dispatches payload properties back to the system route engine API
+ */
+function executeVarianceMerge(event, productId) {
+    event.preventDefault();
+
+    const actualCount = document.getElementById('merge-actual-count').value;
+    const mergeReason = document.getElementById('merge-reason').value;
+
+    fetch('/api/inventory/merge-variance', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
+        },
+        body: JSON.stringify({
+            product_id: parseInt(productId, 10),
+            actual_count: parseInt(actualCount, 10),
+            reason: mergeReason
+        })
+    })
+    .then(response => {
+        if (!response.ok) {
+            return response.json().then(err => { throw new Error(err.message || 'Server error'); });
+        }
+        return response.json();
+    })
+    .then(data => {
+        alert(`✅ Success: ${data.message}`);
+        fetchInventoryDiscrepancies();
+    })
+    .catch(error => {
+        console.error('Merge Error Trace:', error);
+        alert(`❌ Failed to complete operation: ${error.message}`);
+    });
+}
+
+/**
+ * Utility tool to prevent XSS injection risks safely
+ */
+function escapeHtml(string) {
+    return String(string).replace(/[&<>"']/g, s => ({
+        '&': '&amp;', 
+        '<': '&lt;', 
+        '>': '&gt;', 
+        '"': '&quot;', 
+        "'": '&#39;'
+    }[s]));
+}
+
+

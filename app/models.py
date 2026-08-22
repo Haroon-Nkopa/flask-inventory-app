@@ -180,3 +180,80 @@ class SaleItem(db.Model):
 
     def __repr__(self):
         return f"<SaleItem Product ID: {self.product_id} x {self.quantity}>"
+
+
+class InventoryAuditMerge(db.Model):
+    __tablename__ = 'inventory_audit_merge'
+
+    id = db.Column(db.Integer, primary_key=True)
+    
+    # Relationships to existing entities
+    product_id = db.Column(db.Integer, db.ForeignKey('product.id'), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    
+    # Snapshot quantities at the exact moment of adjustment
+    live_record = db.Column(db.Integer, nullable=False)      # The quantity before the override
+    audited_record = db.Column(db.Integer, nullable=False)   # The verified physical count
+    
+    # Audit trail details
+    merge_reason = db.Column(db.Text, nullable=False)        # E.g., "Theft", "Damaged goods", "Input error"
+    
+    # Timezone-aware date tracking matching your other models
+    date = db.Column(
+        db.Date, 
+        nullable=False, 
+        default=lambda: datetime.now(timezone.utc).date()
+    )
+    timestamp = db.Column(
+        db.DateTime, 
+        nullable=False, 
+        default=lambda: datetime.now(timezone.utc)
+    )
+
+    # Active relationship mappings for clean querying
+    product = db.relationship("Product")
+    user = db.relationship("User")
+
+    def __repr__(self):
+        return f"<InventoryAuditMerge Product ID {self.product_id} Adjusted: {self.live_record} -> {self.audited_record}>"
+
+
+# 11. Cashless and Accounting Internal Allocation Ledger
+class CashlessTransaction(db.Model):
+    __tablename__ = 'cashless_transaction'
+
+    id = db.Column(db.Integer, primary_key=True)
+    
+    # Contextual fields linking back to system infrastructure
+    shop_id = db.Column(db.Integer, db.ForeignKey('shop.id'), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    product_id = db.Column(db.Integer, db.ForeignKey('product.id'), nullable=False)
+    
+    # Quantitative allocation metrics
+    quantity = db.Column(db.Integer, nullable=False, default=1)
+    unit_price = db.Column(db.Float, nullable=False)  # Price of product at time of transaction
+    total_value = db.Column(db.Float, nullable=False) # quantity * unit_price (for book value calculations)
+    
+    # Categorization strings matching your HTML drop-down choices
+    allocation_type = db.Column(db.String(50), nullable=False) # 'personal', 'stoloto', or 'other'
+    explanation = db.Column(db.Text, nullable=True)            # Text from explanation field if 'other' is used
+
+    # Timezone-aware date tracking matching your other operational tables
+    date = db.Column(
+        db.Date, 
+        nullable=False, 
+        default=lambda: datetime.now(timezone.utc).date()
+    )
+    timestamp = db.Column(
+        db.DateTime, 
+        nullable=False, 
+        default=lambda: datetime.now(timezone.utc)
+    )
+
+    # Clean active relationships for easy cross-referencing and reporting
+    shop = db.relationship("Shop")
+    user = db.relationship("User")
+    product = db.relationship("Product")
+
+    def __repr__(self):
+        return f"<CashlessTransaction {self.allocation_type.upper()} - Product ID {self.product_id} x{self.quantity}>"

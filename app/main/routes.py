@@ -1,20 +1,21 @@
 #import main blueprint
 from flask_login import current_user, logout_user, login_required
 from . import main
-from flask import render_template, request, redirect, url_for, flash, session, send_file, jsonify 
-from ..models import Product, LiveInventory, DailyInventorySnapshot, PhysicalInventoryCount, Shop, Sale, SaleItem
+from flask import app, render_template, request, redirect, url_for, flash, session, send_file, jsonify, abort
+from ..models import Product, LiveInventory, DailyInventorySnapshot, PhysicalInventoryCount, Shop, Sale, SaleItem, CashlessTransaction
 from .. import db
-from datetime import date , datetime, timedelta  # Add this import
+from datetime import date , datetime, timedelta, timezone  # Add this import
 from ..decorators import shop_required, roles_required, payment_required
 from app.utils.stock_sheet_pdf import generate_stock_sheet_pdf
 from sqlalchemy import func
 from sqlalchemy.orm import joinedload
 from collections import defaultdict
-from .helper import get_inventory_discrepancies
+from .helper import  execute_inventory_merge, get_product_discrepancies_timeline
 
 
 
-@main.route('/', methods=['GET', 'POST'])
+
+@main.route('/', methods=['GET', 'POST']) 
 def enter_shop():
     
     if session.get('shop_id'):
@@ -352,30 +353,37 @@ def submit_stock_api():
         return jsonify({"error": "Failed to save physical count records", "details": str(e)}), 500
 
 #####
-
 @main.route('/api/inventory/discrepancies', methods=['GET'])
 @login_required
 @roles_required('owner')
 @shop_required
 def get_discrepancies_api():
-    """
-    Executes the helper query logic to calculate variances between
-    the latest physical count updates and standard real-time stock balances.
-    """
     shop_id = session.get('shop_id')
     
     try:
-        # Call the standalone backend engine utility from helper.py
-        mismatches = get_inventory_discrepancies(shop_id)
+        # Unpack the underlying engine helper tuple payload data
+        counts_data, timeline_data = get_product_discrepancies_timeline(shop_id)
         
+        # Structure the final list format calculating variance variations dynamically
+        tabular_mismatches = []
+        for prod_id, info in counts_data.items():
+            variance = info['live_quantity'] - info['audited_quantity']
+            tabular_mismatches.append({
+                "product_id": prod_id,
+                "product_name": info['product_name'],
+                "live_quantity": info['live_quantity'],
+                "audited_quantity": info['audited_quantity'],
+                "difference": variance
+            })
+            
         return jsonify({
             "status": "success",
-            "count": len(mismatches),
-            "discrepancies": mismatches
+            "tabular_data": tabular_mismatches,
+            "timeline_data": timeline_data
         }), 200
         
     except Exception as e:
-        # Prevent database locks by running a clean engine error catch fallback
+        print(f"Discrepancy API Parse Stream Fail: {str(e)}")
         return jsonify({
             "status": "error",
             "message": "Failed to parse underlying database query streams."
@@ -392,6 +400,12 @@ def get_discrepancies_api():
 def summary():
     return render_template('main/summary.html')
 
+
+from flask import session, jsonify
+from datetime import date, timedelta
+from sqlalchemy import func
+# Assuming db, Product, Sale, SaleItem, LiveInventory and decorators are imported
+
 @main.route('/api/summary/live', methods=['GET'])
 @payment_required
 @login_required
@@ -401,79 +415,75 @@ def get_live_summary_api():
     shop_id = session.get('shop_id')
     today_date = date.today()
 
-    # 1. FETCH ALL PRODUCTS & LIVE INVENTORY IN ONE QUERY (Avoids N+1 lazy loading)
-    products_with_inv = db.session.query(Product)\
-        .outerjoin(Product.live_inventory)\
-        .filter(Product.shop_id == shop_id)\
-        .all()
-
-    # Initialize data metrics
-    stock_out = []
-    pot_rev, pot_cost = 0.0, 0.0
+    # 1. AGGREGATE FINANCIALS & STOCK-OUTS IN DATABASE (Fixed with select_from)
+    unit_cost_expr = func.coalesce(Product.batch_price / Product.batch_size, 0.0)
+    qty_expr = func.coalesce(LiveInventory.quantity, 0)
     
-    for p in products_with_inv:
-        qty = p.live_inventory.quantity if p.live_inventory else 0
-        unit_cost = (p.batch_price / p.batch_size) if (p.batch_price and p.batch_size) else 0.0
-        
-        pot_rev += (qty * (p.price or 0.0))
-        pot_cost += (qty * unit_cost)
-        
-        if qty == 0:
-            stock_out.append({
-                "name": p.name,
-                "category": p.category or "-",
-                "price": float(p.price or 0.0)
-            })
+    financials = db.session.query(
+        func.sum(qty_expr * func.coalesce(Product.price, 0.0)).label('pot_rev'),
+        func.sum(qty_expr * unit_cost_expr).label('pot_cost')
+    ).select_from(Product)\
+     .outerjoin(LiveInventory, Product.id == LiveInventory.product_id)\
+     .filter(Product.shop_id == shop_id).first()
 
-    # 2. GROUPED SALES METRICS (Fetches total quantity and revenue for ALL products at once)
+    pot_rev = float(financials.pot_rev or 0.0)
+    pot_cost = float(financials.pot_cost or 0.0)
+
+    # Fetch only products that are actually out of stock
+    stock_out_query = db.session.query(Product.name, Product.category, Product.price)\
+        .outerjoin(LiveInventory, Product.id == LiveInventory.product_id)\
+        .filter(Product.shop_id == shop_id, func.coalesce(LiveInventory.quantity, 0) == 0).all()
+
+    stock_out = [
+        {"name": name, "category": category or "-", "price": float(price or 0.0)}
+        for name, category, price in stock_out_query
+    ]
+
+    # 2. OPTIMISED GROUPED SALES METRICS (Fixed join targets)
     sales_query = db.session.query(
-            SaleItem.product_id,
             Product.name,
             Product.category,
             func.sum(SaleItem.quantity).label('sold_qty'),
             func.sum(SaleItem.total_price).label('revenue')
         )\
+        .select_from(SaleItem)\
         .join(Sale, SaleItem.sale_id == Sale.id)\
         .join(Product, SaleItem.product_id == Product.id)\
-        .filter(Sale.shop_id == shop_id, func.date(Sale.timestamp) == today_date)\
-        .group_by(SaleItem.product_id, Product.name, Product.category)\
+        .filter(Sale.shop_id == shop_id, Sale.timestamp >= today_date)\
+        .group_by(Product.id, Product.name, Product.category)\
         .all()
 
     sales_data = []
     today_revenue = 0.0
 
-    for product_id, name, category, sold_qty, revenue in sales_query:
-        sold_qty = int(sold_qty or 0)
-        revenue = float(revenue or 0.0)
-        today_revenue += revenue  # Accumulate today's revenue directly from product sums
-        
+    for name, category, sold_qty, revenue in sales_query:
+        rev_val = float(revenue or 0.0)
+        today_revenue += rev_val
         sales_data.append({
             'name': name,
             'category': category or "-",
-            'sold_qty': sold_qty,
-            'revenue': revenue
+            'sold_qty': int(sold_qty or 0),
+            'revenue': rev_val
         })
 
-    # 3. GROUPED 7-DAY TREND (Fetches historical values in a single database aggregation)
+    # 3. OPTIMISED 7-DAY TREND (Fixed to start securely from Sale table)
     start_date = today_date - timedelta(days=6)
     trend_query = db.session.query(
             func.date(Sale.timestamp).label('sale_date'),
             func.sum(SaleItem.total_price).label('day_rev')
         )\
-        .join(Sale, SaleItem.sale_id == Sale.id)\
-        .filter(Sale.shop_id == shop_id, func.date(Sale.timestamp) >= start_date)\
+        .select_from(Sale)\
+        .join(SaleItem, SaleItem.sale_id == Sale.id)\
+        .filter(Sale.shop_id == shop_id, Sale.timestamp >= start_date)\
         .group_by(func.date(Sale.timestamp))\
         .all()
 
-    # Map database trend results into a dictionary lookup
-    # Note: Depending on your DB engine, 'sale_date' may return a date object or a string.
     trend_map = {str(row.sale_date): float(row.day_rev or 0.0) for row in trend_query}
 
     chart_labels, chart_values = [], []
     for d in range(6, -1, -1):
         target_day = today_date - timedelta(days=d)
         chart_labels.append(target_day.strftime("%A, %d %B"))
-        # Match against our trend lookup dictionary
         chart_values.append(round(trend_map.get(str(target_day), 0.0), 2))
 
     return jsonify({
@@ -697,7 +707,9 @@ def pos_checkout_api():
         return jsonify({"error": "No items in cart"}), 400
 
     shop_id = session.get('shop_id')
-    user_id = session.get('user_id') # Pull operational user footprint from active session
+    
+    # PULL AUTHENTICATED USER FOOTPRINT DIRECTLY FROM FLASK-LOGIN CURRENT_USER
+    user_id = current_user.id 
 
     try:
         # Consolidate duplicate cart items
@@ -751,7 +763,7 @@ def pos_checkout_api():
         # ---------------------------------------------------------
         new_sale = Sale(
             shop_id=shop_id,
-            user_id=user_id,                         # Track which employee finalized transaction
+            user_id=user_id,                         # Tracks exact user primary key bindings securely
             total_amount=running_total,
             timestamp=datetime.utcnow()             # Respect standard UTC timestamps
         )
@@ -931,3 +943,145 @@ def add_new_stock_api():
     except Exception as e:
         db.session.rollback()
         return jsonify({"error": "Failed to update live inventory balances", "details": str(e)}), 500
+
+
+
+
+@main.route('/api/inventory/discrepancies', methods=['GET'])
+@login_required
+def api_get_inventory_discrepancies():
+    # 1. Fetch the active shop context from the session
+    # Adjust 'current_shop_id' if your session key uses a different name
+    shop_id = session.get('current_shop_id')
+    
+    if not shop_id:
+        return jsonify({
+            'message': 'No active shop context selected. Please select a shop first.'
+        }), 400
+
+    try:
+        # 2. Execute your helper function to fetch metadata and timeline states
+        counts_metadata, timeline_phrases = get_product_discrepancies_timeline(shop_id)
+        
+        # 3. Stream data structures back to the JavaScript engine
+        return jsonify({
+            'status': 'success',
+            'tabular_data': counts_metadata,  # Handled smoothly by your updated audit.js parsing
+            'timeline_data': timeline_phrases
+        }), 200
+
+    except Exception as e:
+        # Log this explicitly to your terminal console to see engine failure traces
+        import traceback
+        print("!!! ARCHITECTURE ENGINE CRASH TRACE !!!")
+        traceback.print_exc()
+        
+        return jsonify({
+            'message': f'Internal backend error during calculations: {str(e)}'
+        }), 500
+
+
+@main.route('/api/inventory/merge-variance', methods=['POST'])
+@login_required
+def api_merge_variance():
+    # 1. Parse incoming body parameters
+    data = request.get_json() or {}
+    
+    product_id = data.get('product_id')
+    actual_count = data.get('actual_count')
+    reason = data.get('reason')
+
+    # 2. Defensive validations
+    if product_id is None or actual_count is None or not reason:
+        return jsonify({'message': 'Missing operational data fields inside post body.'}), 400
+        
+    # 3. Offload processing tasks to the core helper function
+    success, message = execute_inventory_merge(
+        product_id=product_id,
+        actual_count=actual_count,
+        reason=reason,
+        current_user_id=current_user.id
+    )
+    
+    # 4. Return matching API engine response states
+    if not success:
+        return jsonify({'message': message}), 500 if "engine error" in message else 404
+        
+    return jsonify({
+        'status': 'success', 
+        'message': message
+    }), 200
+
+
+
+@main.route('/api/pos/cashless', methods=['POST'])
+@login_required
+def pos_cashless_api():
+    # Fetch target operation scope out of safe active tracking configurations
+    shop_id = session.get('shop_id')
+    if not shop_id:
+        return jsonify({"error": "No active shop found in session context"}), 400
+
+    data = request.get_json() or {}
+    allocation_type = data.get('allocation_type')
+    explanation = data.get('explanation')
+    items = data.get('items', [])
+
+    # Structural Payload Verification
+    if not allocation_type or allocation_type not in ['personal', 'stoloto', 'other']:
+        return jsonify({"error": "Invalid or missing allocation type selection"}), 400
+
+    if allocation_type == 'other' and not explanation:
+        return jsonify({"error": "Explanation details missing for category context choice 'other'"}), 400
+
+    if not items:
+        return jsonify({"error": "Transaction payload contains no item lines"}), 400
+
+    try:
+        # Process transaction using an atomised execution architecture to safely roll back on database faults
+        for item in items:
+            p_id = item.get('product_id')
+            qty = int(item.get('quantity', 0))
+
+            if qty <= 0:
+                return jsonify({"error": "Product line quantities must be values greater than 0"}), 400
+
+            # 1. Look up data item details checking scope ownership
+            product = Product.query.filter_by(id=p_id, shop_id=shop_id).first()
+            if not product:
+                return jsonify({"error": f"Product key allocation missing or inaccessible: ID {p_id}"}), 404
+
+            # 2. Inspect real-time stock balances 
+            live_stock = LiveInventory.query.filter_by(product_id=product.id).first()
+            if not live_stock or live_stock.quantity < qty:
+                return jsonify({"error": f"Insufficient inventory for: '{product.name}'. Stock left: {live_stock.quantity if live_stock else 0}"}), 400
+
+            # 3. Deduct transaction item total counts directly from LiveInventory tracking logs
+            live_stock.quantity -= qty
+            live_stock.last_updated = datetime.now(timezone.utc)
+
+            # 4. Generate internal bookkeeping audit logs inside your custom CashlessTransaction structure
+            unit_price = float(product.price)
+            total_value = unit_price * qty
+
+            new_record = CashlessTransaction(
+                shop_id=shop_id,
+                user_id=current_user.id,
+                product_id=product.id,
+                quantity=qty,
+                unit_price=unit_price,
+                total_value=total_value,
+                allocation_type=allocation_type,
+                explanation=explanation,
+                date=datetime.now(timezone.utc).date(),
+                timestamp=datetime.now(timezone.utc)
+            )
+            db.session.add(new_record)
+
+        # Flush operational cache mutations safely out to your active target relational storage database
+        db.session.commit()
+        return jsonify({"success": True, "message": "Cashless transaction processing complete"}), 200
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": f"Internal critical accounting ledger error tracking database save: {str(e)}"}), 500

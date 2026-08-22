@@ -1,128 +1,190 @@
-📦 StockWise – Flask Inventory Management System
+# StockWise
 
-StockWise is a simple, powerful inventory 
-and sales analytics web application built 
-with Flask. It helps businesses track 
-stock, monitor sales trends, and 
-identify top-performing products in real 
-time.
+StockWise is a Flask web application for managing inventory, point-of-sale transactions, physical stock counts, and shop-level reporting. It is designed for retail businesses that need live stock balances, staff permissions, and an audit trail for inventory changes.
 
+## Live application
 
- Live Demo
+The application is hosted on Render:
 
-URL: https://13.61.26.20
-The app uses a self-signed SSL 
-certificate, so your browser will show 
-a security warning.
-Click Advanced → Proceed to access the 
-site safely.
+**https://flask-inventory-app-52kj.onrender.com**
 
+## Features
 
-Features
-	Sales trend analytics dashboard
-	Inventory management (Add / Take / Track stock)
-	Fast-selling product detection
-  Top money-making product insights
-  Stock history tracking
-	Printable stock sheets
-	Stock health monitoring (Out-of-stock alerts)
-	HTTPS enabled (Self-signed SSL)
-	Deployed on AWS Linux cloud server
+### Shop and account management
 
+- Select a shop before entering the workspace.
+- Authenticate users with password-protected accounts and Flask-Login sessions.
+- Support the roles `owner`, `manager`, `employee`, `auditor`, and system `admin`.
+- Restrict shop data and actions according to the active shop and the user role.
+- Allow owners and managers to open the add-user screen for shop staff.
 
-Tech Stack
-	•	Backend: Flask (Python)
-	•	Frontend: HTML, CSS, JavaScript, Bootstrap
-	•	Database: SQLite (can be switched to PostgreSQL/MySQL)
-	•	Charts: Chart.js
-	•	Server: AWS EC2 (Linux)
-	•	Security: Self-signed SSL certificate
+### Product and inventory management
 
-Screenshorts
+- Add products with a name, category, size, selling price, batch size, batch price, reorder lower bound, and batch number.
+- Edit product details while preventing duplicate names within a shop.
+- Receive new stock and update the live inventory balance.
+- View live stock, daily inventory snapshots, and physical audit records.
+- Perform one physical stock take per shop per day, with global or product-specific notes.
+- Record the user responsible for each physical count.
+- Download a printable PDF stock sheet for the active shop.
 
-Demo screenshorts are included above
-in the root directory of the project.
+### Point of sale
 
-Installation 
+- Browse products and their current live quantities in the POS screen.
+- Build a cart and complete a sale after validating product ownership and available stock.
+- Consolidate duplicate cart lines before checkout.
+- Deduct sold quantities from live inventory and create sale and sale-item records atomically.
+- Record cashless stock allocations as `personal`, `stoloto`, or `other`, with an explanation required for `other`.
 
-# Clone repository
-git clone https://github.com/your-username/Flask-inventory-app.git
+### Reporting and audit
 
-# Enter project folder
-cd Flask-inventory-app
+- Browse paginated sales history with product, quantity, price, total, and timestamp details.
+- View an owner-only live summary containing today's revenue, potential profit, stock-outs, fast-selling products, top-earning products, and a seven-day revenue chart.
+- Compare historical daily stock counts over a selected date range.
+- Review audited physical-count logs from the last 30 days or a selected range.
+- Compare live and audited quantities to identify inventory discrepancies.
+- Merge a verified variance into inventory with a required reason.
 
-# Create virtual environment
+## Technology
+
+- **Backend:** Python and Flask
+- **Database and ORM:** SQLAlchemy with Flask-Migrate/Alembic
+- **Authentication:** Flask-Login and Werkzeug password hashing
+- **Frontend:** Jinja templates, HTML, CSS, JavaScript, and Bootstrap
+- **Charts:** Chart.js assets used by the summary views
+- **Documents:** ReportLab PDF stock-sheet generation
+- **Production hosting:** Render
+- **Application server:** A WSGI server such as Gunicorn can serve `entryPoint:app`
+
+## Run locally
+
+### Requirements
+
+- Python 3.8 or newer
+- `pip`
+- Git
+
+### Setup
+
+```bash
+git clone https://github.com/Haroon-Nkopa/flask-inventory-app.git
+cd flask-inventory-app
+
 python -m venv venv
+source venv/bin/activate       # Linux/macOS
+# venv\Scripts\activate      # Windows
 
-# Activate virtual environment
-source venv/bin/activate   # Linux / Mac
-venv\Scripts\activate      # Windows
-
-# Install dependencies
 pip install -r requirements.txt
+```
 
-# Run the app
-python app.py
+Configure the application with environment variables. The default database is a local SQLite file named `app.db` in the project root.
 
-Deployment (AWS Linux)
+```bash
+export SECRET_KEY="replace-with-a-random-secret"
+# Optional: use a managed database instead of local SQLite
+export DATABASE_URL="sqlite:///app.db"
+```
 
-The app is hosted on an AWS Linux cloud machine:
+Apply migrations and start the development server:
 
-Server IP: 13.61.26.20
-Protocol: HTTPS
-SSL: Self-signed certificate
+```bash
+flask db upgrade
+python entryPoint.py
+```
 
-SSL Notice
+Open `http://localhost:5000` in a browser.
 
-This project uses a self-signed SSL certificate for HTTPS encryption. Browsers may show:
+To load the repository's sample data, run:
 
-“Your connection is not private”
+```bash
+python seed_data.py
+```
 
-This is expected. You can safely proceed for development/testing.
+## Render deployment
 
-For production, use Let’s Encrypt or a trusted CA.
+The live service runs on Render. A typical Render web service configuration is:
 
+- **Build command:** `pip install -r requirements.txt`
+- **Start command:** `gunicorn entryPoint:app`
+- **Environment variables:** set a strong `SECRET_KEY` and a production `DATABASE_URL`.
 
-Key Modules
-	•	app.py – Main Flask application
-	•	inventory/ – Stock logic
-	•	analytics/ – Sales & performance insights
-	•	templates/ – HTML views
-	•	static/ – CSS, JS, charts
-	•	database.db – SQLite database
+Run database migrations as part of the deployment process before using schema changes:
 
+```bash
+flask db upgrade
+```
 
-Use Cases
-	•	Small retail shops
-	•	Convenience stores
-	•	Mini supermarkets
-	•	Inventory tracking projects
-	•	Business analytics learning
+For production, use a managed database or persistent storage. A local SQLite file in a web service's ephemeral filesystem should not be treated as durable production data. Render provides HTTPS for the deployed service, so the application no longer requires an EC2 or self-signed-certificate setup.
 
+## Main application routes
 
-Future Improvements
-	•	User authentication / roles
-	•	REST API
-	•	Barcode scanning
-	•	Supplier management
-	•	Automatic reorder alerts
-	•	Cloud database (PostgreSQL)
-	•	Real SSL certificate
-	•	Mobile responsive optimization
+The main blueprint serves the following workflows. Most screens load their data through the accompanying `/api/...` endpoints.
 
+| Route | Purpose | Access |
+| --- | --- | --- |
+| `/` | Select the active shop | Public entry point |
+| `/shop` | Shop product workspace | Authenticated shop users |
+| `/add` | Add-product screen | Owner, manager, employee |
+| `/edit-product` | Edit-product screen | Owner, manager, employee |
+| `/new-stocks` | Receive stock screen | Authenticated shop users |
+| `/take-stock` | Physical stock-take screen | Owner, manager, employee, auditor |
+| `/stock-history` | Live, daily, and audited stock history | Owner, manager |
+| `/pos` | Point-of-sale screen | Owner, manager, employee, auditor |
+| `/sales-history` | Paginated sales history | Owner, manager, auditor |
+| `/summary` | Revenue, stock, sales, and audit summary | Owner |
+| `/print-stock-sheet` | Download a PDF stock sheet | Authenticated shop users |
+| `/logout` | End the current session | Authenticated users |
 
+Important JSON endpoints include:
 
+- `/api/products` and `/api/products/<product_id>` for creating and updating products.
+- `/api/new-stocks` for receiving stock.
+- `/api/take-stock` and `/api/stock-take-products` for physical counts.
+- `/api/pos/products`, `/api/pos/checkout`, and `/api/pos/cashless` for POS operations.
+- `/api/sales-history` for paginated transaction history.
+- `/api/summary/live`, `/api/summary/daily-count`, and `/api/summary/audited` for reporting data.
+- `/api/inventory/discrepancies` and `/api/inventory/merge-variance` for variance review and reconciliation.
 
+## Project structure
 
+```text
+flask-inventory-app/
+├── app/
+│   ├── __init__.py             # Flask app factory and blueprint registration
+│   ├── models.py               # SQLAlchemy models
+│   ├── decorators.py           # Shop, role, and payment access checks
+│   ├── main/                   # Inventory, POS, audit, and reporting workflows
+│   ├── auth/                   # User login and logout
+│   ├── admin/                  # System admin shop and user management
+│   ├── subscription/           # Shop registration and subscription screens
+│   ├── templates/               # Jinja HTML templates
+│   ├── static/                  # CSS, JavaScript, manifest, and service worker assets
+│   └── utils/                   # PDF stock-sheet generation
+├── migrations/                 # Alembic migration history
+├── config.py                   # Environment-backed Flask configuration
+├── entryPoint.py               # WSGI application entry point
+├── requirements.txt            # Python dependencies
+├── seed_data.py                # Optional sample-data loader
+└── README.md
+```
 
+## Database model areas
 
+The data model includes shops and users, products, live inventory, sales and sale items, daily inventory snapshots, physical inventory counts, inventory records, and cashless transactions. Inventory queries are scoped to the active shop, while role and payment decorators protect sensitive screens and APIs.
 
+## Development notes
 
+Apply migrations after changing models:
 
+```bash
+flask db migrate -m "Describe the schema change"
+flask db upgrade
+```
 
-  
+There is currently no committed test suite in the repository. Before deploying changes, verify the affected workflow locally and check the Render service logs for migration or database errors.
 
+## License and support
 
+For questions, bug reports, or feature requests, open an issue in the GitHub repository:
 
-
-
+https://github.com/Haroon-Nkopa/flask-inventory-app

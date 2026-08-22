@@ -177,3 +177,91 @@ async function checkout() {
         if (spinner) spinner.classList.add('d-none');
     }
 }
+
+
+
+// 5. Cashless Accounting Transaction Handler (Plain Function)
+async function submitCashlessTransaction() {
+    const reasonSelect = document.getElementById('cashlessReason');
+    const explanationInput = document.getElementById('otherReasonDetail');
+    const submitBtn = document.getElementById('submitCashlessBtn');
+    const btnText = document.getElementById('cashlessBtnText');
+    const spinner = document.getElementById('cashlessSpinner');
+
+    // Validation Guardrails
+    if (Object.keys(cart).length === 0) {
+        alert("Cart is empty! Cannot log cashless transaction.");
+        return;
+    }
+
+    if (!reasonSelect.value) {
+        alert("Please select an internal allocation reason.");
+        return;
+    }
+
+    if (reasonSelect.value === 'other' && !explanationInput.value.trim()) {
+        alert("Please provide details in the explanation field.");
+        return;
+    }
+
+    const orderData = Object.keys(cart).map(id => ({
+        product_id: id,
+        quantity: cart[id].qty
+    }));
+
+    const payload = {
+        allocation_type: reasonSelect.value,
+        explanation: reasonSelect.value === 'other' ? explanationInput.value.trim() : null,
+        items: orderData
+    };
+
+    // UI Loading State Accentuation
+    submitBtn.disabled = true;
+    if (btnText) btnText.textContent = "Logging Record...";
+    if (spinner) spinner.classList.remove('d-none');
+
+    try {
+        const response = await fetch(POS_CONFIG.cashlessUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+        });
+
+        const result = await response.json();
+
+        if (response.ok) {
+            alert("Accounting Log Saved Successfully!");
+            
+            // Clean up forms and reset local state variables
+            reasonSelect.value = "";
+            explanationInput.value = "";
+            document.getElementById('otherReasonContainer').classList.add('d-none');
+            
+            // Close collapsible Bootstrap element safely
+            const cashlessCollapse = document.getElementById('cashlessContainer');
+            if (cashlessCollapse && cashlessCollapse.classList.contains('show')) {
+                cashlessCollapse.classList.remove('show');
+            }
+
+            // Deduct local memory caches and refresh catalog
+            Object.keys(cart).forEach(id => {
+                if (productStockMap[id] !== undefined) {
+                    productStockMap[id] -= cart[id].qty;
+                }
+            });
+
+            cart = {};
+            renderCart();
+            loadProducts();
+        } else {
+            alert("⚠️ " + (result.error || "Failed to log cashless transaction."));
+        }
+    } catch (error) {
+        console.error("Cashless API error:", error);
+        alert("Network error. Could not connect to server to log cashless sale.");
+    } finally {
+        submitBtn.disabled = false;
+        if (btnText) btnText.textContent = "Confirm Accounting Log";
+        if (spinner) spinner.classList.add('d-none');
+    }
+}

@@ -12,6 +12,13 @@
     .btn-success { background-color: #198754; border: none; }
     .cart-container::-webkit-scrollbar { width: 6px; }
     .cart-container::-webkit-scrollbar-thumb { background: #3c4b6e; border-radius: 10px; }
+
+    /* Custom styles for the cashless accounting container */
+    .cashless-panel {
+        background-color: #242f47;
+        border-radius: 8px;
+        transition: all 0.3s ease;
+    }
 </style>
 {% endblock %}
 
@@ -38,14 +45,13 @@
               <tr>
                 <th>Product</th>
                 <th>Category</th>
-                <th>Stock</th> <!-- FIXED: Added explicit header column matching your script changes -->
+                <th>Stock</th>
                 <th>Price</th>
                 <th class="text-end">Action</th>
               </tr>
             </thead>
             <tbody id="productTable">
               <tr>
-                <!-- FIXED: Increased colspan to 5 to prevent visual grid breaking on load -->
                 <td colspan="5" class="text-center py-5">
                   <div class="spinner-border text-success" role="status"></div>
                   <p class="mt-2 text-muted">Loading products...</p>
@@ -85,10 +91,44 @@
             <span id="grandTotal" class="text-success">R 0.00</span>
           </div>
           
-          <button id="checkoutBtn" class="btn btn-lg btn-primary w-100 mt-4">
-            <span id="btnText">Complete Transaction</span>
-            <span id="btnSpinner" class="spinner-border spinner-border-sm d-none" role="status"></span>
-          </button>
+          <!-- Actions Container -->
+          <div class="mt-4">
+            <button id="checkoutBtn" class="btn btn-lg btn-primary w-100 mb-2">
+              <span id="btnText">Complete Transaction</span>
+              <span id="btnSpinner" class="spinner-border spinner-border-sm d-none" role="status"></span>
+            </button>
+
+            <!-- Inline click fallback added to bypass missing Bootstrap JS components safely -->
+            <button id="toggleCashlessBtn" class="btn btn-outline-info w-100" type="button" onclick="fallbackToggleContainer()">
+              📋 Log Internal / Cashless Use
+            </button>
+          </div>
+
+          <!-- Collapsible Cashless Dropdown & Form Field (Default hidden via custom CSS fallback state style) -->
+          <div id="cashlessContainer" class="collapse mt-3" style="display: none;">
+            <div class="cashless-panel p-3 border border-secondary text-white">
+              <label for="cashlessReason" class="form-label fw-bold small text-info">Select Internal Allocation Reason:</label>
+              <!-- Added clean onchange script linkage here to control input elements -->
+              <select id="cashlessReason" class="form-select bg-dark text-white border-secondary mb-3" onchange="handleReasonChange()">
+                <option value="" selected disabled>-- Choose Reason --</option>
+                <option value="personal">Personal Use</option>
+                <option value="stoloto">Stoloto (Credit Buying)</option>
+                <option value="other">Other</option>
+              </select>
+
+              <!-- Dynamic hidden reason detail explanation box -->
+              <div id="otherReasonContainer" class="d-none">
+                <label for="otherReasonDetail" class="form-label small text-warning">Please explain details:</label>
+                <textarea id="otherReasonDetail" class="form-control bg-dark text-white border-secondary mb-3" rows="2" placeholder="Provide context for accounting records..."></textarea>
+              </div>
+
+              <button id="submitCashlessBtn" class="btn btn-info w-100 fw-bold" onclick="submitCashlessTransaction()">
+                <span id="cashlessBtnText">Confirm Accounting Log</span>
+                <span id="cashlessSpinner" class="spinner-border spinner-border-sm d-none" role="status"></span>
+              </button>
+            </div>
+          </div>
+
         </div>
       </div>
     </div>
@@ -102,8 +142,36 @@
   const POS_CONFIG = {
     productsUrl: "{{ url_for('main.get_pos_products') }}",
     checkoutUrl: "{{ url_for('main.pos_checkout_api') }}",
+    cashlessUrl: "{{ url_for('main.pos_cashless_api') }}",
     shopName: "{{ session['shop_name'] }}"
   };
+
+  // Plain function to open/close the container completely independent of Bootstrap's library
+  function fallbackToggleContainer() {
+    const container = document.getElementById('cashlessContainer');
+    if (container) {
+        if (container.style.display === 'none' || !container.classList.contains('show')) {
+            container.style.display = 'block';
+            container.classList.add('show');
+        } else {
+            container.style.display = 'none';
+            container.classList.remove('show');
+        }
+    }
+  }
+
+  // Plain function to show/hide the description field immediately when choice shifts
+  function handleReasonChange() {
+    const reasonSelect = document.getElementById('cashlessReason');
+    const otherBox = document.getElementById('otherReasonContainer');
+    if (reasonSelect && otherBox) {
+        if (reasonSelect.value === 'other') {
+          otherBox.classList.remove('d-none');
+        } else {
+          otherBox.classList.add('d-none');
+        }
+    }
+  }
 </script>
 
 <script src="{{ url_for('static', filename='js/pos.js')}}"></script>

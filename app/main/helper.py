@@ -1,58 +1,145 @@
+from datetime import datetime, timezone
 from sqlalchemy import func
-from .. import db
-from ..models import (
-    Product, 
-    LiveInventory, 
-    PhysicalInventoryCount
-)
+from app import db
+from app.models import Product, Sale, SaleItem, User, PhysicalInventoryCount, LiveInventory, InventoryAuditMerge
 
-def get_inventory_discrepancies(shop_id):
+def get_product_discrepancies_timeline(shop_id):
     """
-    Compares the latest physical inventory audit counts against active live quantities
-    for a specific shop. Returns a list of dictionaries detailing any mismatches.
+    Identifies stock count variances and builds chronological timelines.
+    Returns: Tuple (counts_metadata_dict, timeline_phrases_dict)
     """
-    # 1. Subquery: Extract the absolute latest physical count timestamp per product
-    latest_count_subquery = db.session.query(
-        PhysicalInventoryCount.product_id,
-        func.max(PhysicalInventoryCount.timestamp).label('max_timestamp')
-    ).group_by(PhysicalInventoryCount.product_id).subquery()
+    counts_metadata = {}
+    timeline_phrases = {}
 
-    # 2. Main Query: Join the latest audit records with live inventory quantities
-    # We restrict products by shop_id to maintain clean context boundaries
-    discrepancies_query = db.session.query(
-            Product.id.label('product_id'),
-            Product.name.label('product_name'),
-            func.coalesce(LiveInventory.quantity, 0).label('live_quantity'),
-            PhysicalInventoryCount.counted_quantity.label('audited_quantity')
-        )\
-        .join(LiveInventory, Product.id == LiveInventory.product_id)\
-        .join(latest_count_subquery, Product.id == latest_count_subquery.c.product_id)\
-        .join(
-            PhysicalInventoryCount, 
-            (PhysicalInventoryCount.product_id == latest_count_subquery.c.product_id) & 
-            (PhysicalInventoryCount.timestamp == latest_count_subquery.c.max_timestamp)
-        )\
-        .filter(Product.shop_id == shop_id)\
-        .all()
-
-    discrepancies_list = []
-
-    # 3. Filter and parse discrepancies in memory
-    for row in discrepancies_query:
-        live_qty = int(row.live_quantity)
-        audited_qty = int(row.audited_quantity)
+    products = db.session.query(Product).filter(Product.shop_id == shop_id).all()
+    
+    for p in products:
+        last_audit = db.session.query(PhysicalInventoryCount)\
+            .filter(PhysicalInventoryCount.product_id == p.id)\
+            .order_by(PhysicalInventoryCount.timestamp.desc())\
+            .first()
+            
+        if not last_audit:
+            continue
+            
+        live_qty = p.live_inventory.quantity if p.live_inventory else 0
+        audited_qty = last_audit.counted_quantity
         
-        # Calculate the operational variance
-        difference = audited_qty - live_qty
+        if live_qty == audited_qty:
+            continue
 
-        # If a variance exists, capture it into standard key-value pairs
-        if difference != 0:
-            discrepancies_list.append({
-                "product_id": int(row.product_id),
-                "product_name": str(row.product_name),
-                "live_quantity": live_qty,
-                "audited_quantity": audited_qty,
-                "difference": difference
-            })
+        # Save counts metadata dictionary
+        counts_metadata[p.id] = {
+            "product_name": p.name,
+            "live_quantity": live_qty,
+            "audited_quantity": audited_qty
+        }
 
-    return discrepancies_list
+        # Fetch sales since physical verification log
+        sales_since_audit = db.session.query(
+                SaleItem.quantity,
+                Sale.timestamp,
+                User.username
+            )\
+            .join(Sale, SaleItem.sale_id == Sale.id)\
+            .outerjoin(User, Sale.user_id == User.id)\
+            .filter(SaleItem.product_id == p.id, Sale.timestamp >= last_audit.timestamp)\
+            .order_by(Sale.timestamp.asc())\
+            .all()
+
+        # If no sales happened but variances exist, initialize empty array
+        if not sales_since_audit:
+            timeline_phrases[p.name] = [f"No logged sales recorded since physical count on {last_audit.timestamp.strftime('%Y-%m-%d %H:%M')}."]
+            continue
+
+        intervals = []
+        current_user_name = sales_since_audit[0].username or "System/Unknown"
+        interval_start_time = last_audit.timestamp
+        current_qty_sum = 0
+        
+        for item in sales_since_audit:
+            item_user = item.username or "System/Unknown"
+            
+            if item_user != current_user_name:
+                intervals.append({
+                    "user": current_user_name,
+                    "num_sold": current_qty_sum,
+                    "start": interval_start_time.strftime("%Y-%m-%d %H:%M"),
+                    "end": item.timestamp.strftime("%Y-%m-%d %H:%M")
+                })
+                current_user_name = item_user
+                interval_start_time = item.timestamp
+                current_qty_sum = item.quantity
+            else:
+                current_qty_sum += item.quantity
+
+        intervals.append({
+            "user": current_user_name,
+            "num_sold": current_qty_sum,
+            "start": interval_start_time.strftime("%Y-%m-%d %H:%M"),
+            "end": sales_since_audit[-1].timestamp.strftime("%Y-%m-%d %H:%M")
+        })
+
+        formatted_phrases = []
+        for iv in intervals:
+            phrase = f"{iv['user']} sold {iv['num_sold']} {p.name} from {iv['start']} to {iv['end']}"
+            formatted_phrases.append(phrase)
+            
+        timeline_phrases[p.name] = formatted_phrases
+
+    return counts_metadata, timeline_phrases
+
+
+def execute_inventory_merge(product_id, actual_count, reason, current_user_id):
+    """
+    Executes a database merge operation for inventory variance.
+    Returns: Tuple (bool, str) indicating (success_status, message)
+    """
+    try:
+        # 1. Locate the target live inventory record
+        live_record = LiveInventory.query.filter_by(product_id=product_id).first()
+        if not live_record:
+            return False, "Target Live Inventory record missing for this product."
+            
+        old_live_qty = live_record.quantity
+        
+        # 2. Fetch the latest physical count record to sync it up with reality
+        latest_audit = PhysicalInventoryCount.query.filter_by(product_id=product_id)\
+                        .order_by(PhysicalInventoryCount.timestamp.desc()).first()
+        
+        # 3. Create historical reference trace inside the merge ledger table
+        merge_log = InventoryAuditMerge(
+            product_id=product_id,
+            user_id=current_user_id,
+            live_record=old_live_qty,
+            audited_record=actual_count,
+            merge_reason=reason,
+            date=datetime.now(timezone.utc).date(),
+            timestamp=datetime.now(timezone.utc)
+        )
+        db.session.add(merge_log)
+
+        # 4. Synchronise live tracking balance properties
+        live_record.quantity = actual_count
+        
+        # 5. Correct the audit tracker entry to prevent discrepancy loops
+        if latest_audit:
+            latest_audit.counted_quantity = actual_count
+            latest_audit.notes = f"[Merged Override]: {reason} (Prior count state: {latest_audit.counted_quantity})"
+        else:
+            # Fallback behavior: Generate an explicit audit state if an anomaly occurs
+            new_audit_stub = PhysicalInventoryCount(
+                product_id=product_id,
+                counted_quantity=actual_count,
+                user_id=current_user_id,
+                notes=f"[System Backfill Merge Variance]: {reason}"
+            )
+            db.session.add(new_audit_stub)
+
+        # 6. Commit execution state safely
+        db.session.commit()
+        return True, f"Inventory variances reconciled cleanly. Live track re-balanced to {actual_count}."
+
+    except Exception as e:
+        db.session.rollback()
+        return False, f"Database execution engine error: {str(e)}"
