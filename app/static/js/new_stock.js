@@ -55,7 +55,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 submitBtn.textContent = originalText;
             } else {
                 alert("🎉 " + data.message);
-                window.location.href = redirectUrl;
+                
+                // NEW: Clear the entire form fields
+                addStockForm.reset();
+                
+                // NEW: Re-enable the button and restore text for the next entry
+                submitBtn.disabled = false;
+                submitBtn.textContent = originalText;
             }
         })
         .catch(err => {

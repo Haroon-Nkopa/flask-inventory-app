@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+
+{% block title %}Financial Management | StockWise{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+  
+  <!-- Header Navigation Row -->
+  <div class="d-flex justify-content-between align-items-center border-bottom border-secondary pb-3 mb-4">
+    <div class="text-start">
+      <h2 class="mb-0 fw-bold text-white">💰 Financial Management</h2>
+      <p class="text-secondary small mb-0">Audit inventory underpricing anomalies, review net product yield margins, and monitor health metrics.</p>
+    </div>
+    <a href="{{ url_for('main.shop') }}" class="btn btn-outline-light btn-sm">&larr; Back to Shop</a>
+  </div>
+
+  <!-- UPDATED SECTION: Automated Business Health Assessment Diagnostics -->
+  <div id="business-health-section" class="mb-4 text-start d-none">
+    <div id="business-health-card" class="card text-white shadow mb-3">
+      <div class="card-header fw-bold d-flex justify-content-between align-items-center bg-black bg-opacity-20">
+        <span>📊 Automated Business Health Diagnostics</span>
+        <span id="business-health-badge" class="badge px-3 py-1 font-monospace">EVALUATING</span>
+      </div>
+      <div class="card-body">
+        <h4 id="business-health-statement" class="fw-bold mb-3">Compiling store metrics...</h4>
+        
+        <!-- Quick stats summary block customized for Restock Budgeting -->
+        <div class="row g-2 text-center text-dark fw-bold mt-2">
+          <div class="col-6 col-md-4">
+            <div class="bg-light rounded p-2 shadow-sm">
+              <div class="text-secondary small text-uppercase">Realised Revenue</div>
+              <div id="health-stat-revenue" class="text-primary fs-5">R 0.00</div>
+            </div>
+          </div>
+          <div class="col-6 col-md-4">
+            <div class="bg-light rounded p-2 shadow-sm">
+              <div class="text-secondary small text-uppercase">⚠️ Save for Restocking</div>
+              <div id="health-stat-restock-budget" class="text-danger fs-5">R 0.00</div>
+            </div>
+          </div>
+          <div class="col-12 col-md-4">
+            <div class="bg-light rounded p-2 shadow-sm">
+              <div class="text-secondary small text-uppercase">True Net Profit</div>
+              <div id="health-stat-true-profit" class="text-success fs-5">R 0.00</div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- SECTION 1: Critical Underpriced Flagged Alerts Table (PRESERVED) -->
+  <div id="underpriced-section">
+    <!-- Initial Loading State Spinner -->
+    <div id="loading-spinner" class="text-center py-4">
+      <div class="spinner-border text-danger" role="status"></div>
+      <p class="text-muted small mt-2">Checking system for underpriced inventory items...</p>
+    </div>
+
+    <!-- Alert Banner displayed if everything is healthy -->
+    <div id="healthy-alert" class="alert alert-success d-none text-start animate fade show" role="alert">
+      🎉 <strong>Excellent!</strong> No underpriced products found. All items are configured with a positive profit margin.
+    </div>
+
+    <!-- Underpriced Block Container -->
+    <div id="report-table-container" class="card bg-dark border-danger shadow mb-4 d-none text-start">
+      <div class="card-header bg-danger text-white fw-bold d-flex justify-content-between align-items-center">
+        <span>🚨 Action Required: Flagged Items (Losing or Breaking Even)</span>
+        <span class="badge bg-dark text-danger font-monospace" id="items-count-badge">0 Items</span>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-dark table-striped table-hover align-middle mb-0 text-center">
+          <thead>
+            <tr>
+              <th class="text-start">Product Name</th>
+              <th>Category</th>
+              <th>Cost Per Unit</th>
+              <th>Selling Price</th>
+              <th class="text-danger">Margin Loss</th>
+            </tr>
+          </thead>
+          <tbody id="underpriced-table-body">
+            <!-- Populated via javascript execution -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- CONTROL INTERACTION BUTTON ROW -->
+  <div class="my-4 text-center">
+    <button class="btn btn-outline-info px-4 py-2 fw-bold" id="toggle-margins-btn" onclick="toggleProfitMarginsView()">
+      🔍 View Profit Margins for All Products
+    </button>
+  </div>
+
+  <!-- SECTION 2: General Store Profit Margin Ledger (Hidden by default) -->
+  <div id="all-margins-container" class="card bg-dark border-secondary shadow mb-5 d-none text-start">
+    <div class="card-header bg-black text-white fw-bold d-flex justify-content-between align-items-center">
+      <span>📋 Live Product Margins Ledger</span>
+      <span class="badge bg-secondary font-monospace" id="all-items-count-badge">0 Products</span>
+    </div>
+    <div class="table-responsive">
+      <table class="table table-dark table-striped table-hover align-middle mb-0 text-center">
+        <thead>
+          <tr>
+            <th class="text-start">Product Name</th>
+            <th>Category</th>
+            <th>Cost Per Unit</th>
+            <th>Selling Price</th>
+            <th>Net Profit Margin</th>
+          </tr>
+        </thead>
+        <tbody id="margins-table-body">
+          <tr>
+            <td colspan="5" class="text-muted py-4">
+              <div class="spinner-border spinner-border-sm text-info me-2" role="status"></div>
+              Compiling complete store ledger matrix details...
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/financial.js') }}"></script>
+{% endblock %}

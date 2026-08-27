@@ -2,7 +2,7 @@
 from flask_login import current_user, logout_user, login_required
 from . import main
 from flask import app, render_template, request, redirect, url_for, flash, session, send_file, jsonify, abort
-from ..models import Product, LiveInventory, DailyInventorySnapshot, PhysicalInventoryCount, Shop, Sale, SaleItem, CashlessTransaction
+from ..models import Product, LiveInventory, DailyInventorySnapshot, PhysicalInventoryCount, Shop, Sale, SaleItem, CashlessTransaction, StockReceivedLog
 from .. import db
 from datetime import date , datetime, timedelta, timezone  # Add this import
 from ..decorators import shop_required, roles_required, payment_required
@@ -193,6 +193,7 @@ def stock_history():
     return render_template('main/stock_history.html')
 
 
+
 @main.route('/api/stock-history')
 @payment_required
 @login_required
@@ -200,21 +201,16 @@ def stock_history():
 @shop_required
 def get_stock_history_api():
     shop_id = session.get('shop_id')
-    
-    # Read the query parameter string sent from JS (defaults to 'live')
+    # Default explicitly to 'live' to match your HTML dropdown's initial state
     report_type = request.args.get('type', 'live').strip().lower()
-    
-    records_payload = []
 
     try:
+        # --- PATHWAY 1: LIVE REPORT ---
         if report_type == 'live':
-            # Fetch products alongside their strict 1-to-1 LiveInventory hook
             products = Product.query.filter_by(shop_id=shop_id).all()
-            
+            records_payload = []
             for product in products:
-                # Fallback to 0 if live_inventory link hasn't been initialized yet
                 qty = product.live_inventory.quantity if product.live_inventory else 0
-                
                 records_payload.append({
                     "product_name": product.name,
                     "category": product.category or 'General',
@@ -222,55 +218,70 @@ def get_stock_history_api():
                     "quantity": qty,
                     "lower_bound": product.lower_bound
                 })
+            return jsonify({"report_type": "live", "records": records_payload}), 200
 
-        elif report_type == 'daily':
-            # Query the 1-to-many snapshots table joined against shop products
-            daily_records = db.session.query(DailyInventorySnapshot, Product)\
-                .join(Product, DailyInventorySnapshot.product_id == Product.id)\
-                .filter(Product.shop_id == shop_id)\
-                .order_by(DailyInventorySnapshot.date.desc()).all()
-                
-            for snapshot, product in daily_records:
-                records_payload.append({
-                    "date": snapshot.date.strftime('%Y-%m-%d %H:%M') if isinstance(snapshot.date, datetime) else str(snapshot.date),
-                    "product_name": product.name,
-                    "category": product.category or 'General',
-                    "quantity": snapshot.quantity
-                })
-
-        elif report_type == 'audited':
-            # Query the 1-to-many physical count tracking table
-            audit_records = db.session.query(PhysicalInventoryCount, Product)\
+        # --- PATHWAY 2 & 3: MATRIX STRUCTURES ('daily' or 'audited') ---
+        if report_type == 'audited':
+            db_records = db.session.query(PhysicalInventoryCount, Product)\
                 .join(Product, PhysicalInventoryCount.product_id == Product.id)\
                 .filter(Product.shop_id == shop_id)\
                 .order_by(PhysicalInventoryCount.date.desc()).all()
-                
-            for audit, product in audit_records:
-                # Safely pull the user identifier from the User relationship if loaded
-                user_display = audit.user.username if (hasattr(audit, 'user') and audit.user) else "System"
-                base_note = audit.notes if audit.notes else "No audit notes saved."
-                
-                records_payload.append({
-                    "date": audit.date.strftime('%Y-%m-%d') if hasattr(audit.date, 'strftime') else str(audit.date),
-                    "product_name": product.name,
-                    "category": product.category or 'General',
-                    "quantity": audit.counted_quantity, # FIXED: Changed from .quantity to match model
-                    "notes": f"{base_note} (Audited by: {user_display})" # Added auditor name to tracking output
-                })
-        
+        elif report_type == 'daily':
+            db_records = db.session.query(DailyInventorySnapshot, Product)\
+                .join(Product, DailyInventorySnapshot.product_id == Product.id)\
+                .filter(Product.shop_id == shop_id)\
+                .order_by(DailyInventorySnapshot.date.desc()).all()
         else:
-            return jsonify({"error": f"Invalid reporting parameter option: '{report_type}'"}), 400
+            return jsonify({"error": f"Invalid type parameter: {report_type}"}), 400
 
-        # Return structural data array block matching your JS loadStockHistory engine expectation
-        return jsonify({"records": records_payload}), 200
+        # Diagnostics: Print to console to see if rows exist in DB
+        print(f"DEBUG LOG: Found {len(db_records)} records for report type '{report_type}' in shop {shop_id}")
+
+        unique_dates_set = set()
+        matrix_map = defaultdict(lambda: {"name": "", "category": "", "history": {}, "notes": {}})
+
+        for record_item, product in db_records:
+            # Safely handle diverse database date formats
+            if hasattr(record_item.date, 'strftime'):
+                date_str = record_item.date.strftime('%Y-%m-%d')
+            else:
+                date_str = str(record_item.date)[:10] # Grab just the YYYY-MM-DD component string
+
+            unique_dates_set.add(date_str)
+            
+            matrix_map[product.id]["name"] = product.name
+            matrix_map[product.id]["category"] = product.category or 'General'
+            
+            if report_type == 'audited':
+                matrix_map[product.id]["history"][date_str] = record_item.counted_quantity
+                user_display = record_item.user.username if (hasattr(record_item, 'user') and record_item.user) else "System"
+                base_note = record_item.notes if record_item.notes else "No notes."
+                matrix_map[product.id]["notes"][date_str] = f"{base_note} (By: {user_display})"
+            else:
+                # FIXED: Pointed directly to your explicit model property assignment attribute
+                matrix_map[product.id]["history"][date_str] = record_item.closing_quantity
+
+        sorted_dates = sorted(list(unique_dates_set), reverse=True)
+
+        stock_data_output = []
+        for p_id, item_data in matrix_map.items():
+            stock_data_output.append({
+                "name": item_data["name"],
+                "category": item_data["category"],
+                "history": item_data["history"],
+                "notes": item_data["notes"]
+            })
+
+        return jsonify({
+            "report_type": report_type,
+            "dates": sorted_dates,
+            "stock_data": stock_data_output
+        }), 200
 
     except Exception as e:
-        return jsonify({"error": "Failed fetching database records", "details": str(e)}), 500
-
-
-    except Exception as e:
-        return jsonify({"error": "Failed fetching database matrix details", "details": str(e)}), 500
-
+        import traceback
+        print(traceback.format_exc()) # Prints the exact line that broke to your server terminal
+        return jsonify({"error": "Failed generating stock matrix payload", "details": str(e)}), 500
 
 ######
 
@@ -401,11 +412,6 @@ def summary():
     return render_template('main/summary.html')
 
 
-from flask import session, jsonify
-from datetime import date, timedelta
-from sqlalchemy import func
-# Assuming db, Product, Sale, SaleItem, LiveInventory and decorators are imported
-
 @main.route('/api/summary/live', methods=['GET'])
 @payment_required
 @login_required
@@ -428,6 +434,33 @@ def get_live_summary_api():
 
     pot_rev = float(financials.pot_rev or 0.0)
     pot_cost = float(financials.pot_cost or 0.0)
+
+    # NEW: Fetch unverified cashless transactions joined with Product details
+    unverified_cashless_query = db.session.query(
+            CashlessTransaction.id,
+            Product.name,
+            CashlessTransaction.quantity,
+            CashlessTransaction.total_value,
+            CashlessTransaction.allocation_type,
+            CashlessTransaction.timestamp
+        )\
+        .join(Product, CashlessTransaction.product_id == Product.id)\
+        .filter(
+            CashlessTransaction.shop_id == shop_id, 
+            func.coalesce(CashlessTransaction.verified, False) == False
+        ).all()
+
+    unverified_transactions = [
+        {
+            "transaction_id": tx_id,
+            "product_name": name,
+            "quantity": qty,
+            "total_value": float(val or 0.0),
+            "type": alloc_type,
+            "timestamp": timestamp.isoformat() if timestamp else None
+        }
+        for tx_id, name, qty, val, alloc_type, timestamp in unverified_cashless_query
+    ]
 
     # Fetch only products that are actually out of stock
     stock_out_query = db.session.query(Product.name, Product.category, Product.price)\
@@ -491,6 +524,7 @@ def get_live_summary_api():
         "total_revenue": round(today_revenue, 2),
         "potential_profit": round(pot_rev - pot_cost, 2),
         "stock_out": stock_out,
+        "unverified_cashless_transactions": unverified_transactions,  # Injected mapped data list here
         "fast_selling": sorted(sales_data, key=lambda x: x['sold_qty'], reverse=True)[:10],
         "top_earning": sorted(sales_data, key=lambda x: x['revenue'], reverse=True)[:10],
         "chart": {"labels": chart_labels, "values": chart_values}
@@ -945,40 +979,65 @@ def add_new_stock_api():
         return jsonify({"error": "Failed to update live inventory balances", "details": str(e)}), 500
 
 
-
-
 @main.route('/api/inventory/discrepancies', methods=['GET'])
 @login_required
 def api_get_inventory_discrepancies():
-    # 1. Fetch the active shop context from the session
-    # Adjust 'current_shop_id' if your session key uses a different name
     shop_id = session.get('current_shop_id')
-    
+
     if not shop_id:
         return jsonify({
             'message': 'No active shop context selected. Please select a shop first.'
         }), 400
 
     try:
-        # 2. Execute your helper function to fetch metadata and timeline states
+        # 1. Run your original helper function exactly as it stands
         counts_metadata, timeline_phrases = get_product_discrepancies_timeline(shop_id)
-        
-        # 3. Stream data structures back to the JavaScript engine
+
+        formatted_tabular_data = []
+        oldest_audit_date = None
+
+        # 2. Complete the data map using the actual models
+        for product_id, item_data in counts_metadata.items():
+            
+            # Direct database lookups for the items left out by the helper
+            product = db.session.query(Product).get(product_id)
+            selling_price = product.price if product else 0.0
+
+            last_audit = db.session.query(PhysicalInventoryCount)\
+                .filter(PhysicalInventoryCount.product_id == product_id)\
+                .order_by(PhysicalInventoryCount.timestamp.desc())\
+                .first()
+            
+            last_audit_str = last_audit.date.strftime('%Y-%m-%d') if last_audit else None
+
+            # Calculate oldest audit date for the summary range block
+            if last_audit_str:
+                if oldest_audit_date is None or last_audit_str < oldest_audit_date:
+                    oldest_audit_date = last_audit_str
+
+            formatted_tabular_data.append({
+                "product_id": product_id,
+                "product_name": item_data.get("product_name", ""),
+                "live_quantity": item_data.get("live_quantity", 0),
+                "audited_quantity": item_data.get("audited_quantity", 0),
+                "selling_price": float(selling_price) # Guarantees JavaScript gets a clean number
+            })
+
         return jsonify({
-            'status': 'success',
-            'tabular_data': counts_metadata,  # Handled smoothly by your updated audit.js parsing
-            'timeline_data': timeline_phrases
+            "status": "success",
+            "tabular_data": formatted_tabular_data,
+            "timeline_data": timeline_phrases,
+            "last_audit_date": oldest_audit_date if oldest_audit_date else "the last count date",
+            "today_date": datetime.now(timezone.utc).strftime("%Y-%m-%d")
         }), 200
 
     except Exception as e:
-        # Log this explicitly to your terminal console to see engine failure traces
-        import traceback
-        print("!!! ARCHITECTURE ENGINE CRASH TRACE !!!")
-        traceback.print_exc()
-        
+        print("DISCREPANCY API ERROR:", str(e))
         return jsonify({
-            'message': f'Internal backend error during calculations: {str(e)}'
+            "status": "error",
+            "error": str(e)
         }), 500
+
 
 
 @main.route('/api/inventory/merge-variance', methods=['POST'])
@@ -1078,6 +1137,8 @@ def pos_cashless_api():
             )
             db.session.add(new_record)
 
+        
+
         # Flush operational cache mutations safely out to your active target relational storage database
         db.session.commit()
         return jsonify({"success": True, "message": "Cashless transaction processing complete"}), 200
@@ -1085,3 +1146,230 @@ def pos_cashless_api():
     except Exception as e:
         db.session.rollback()
         return jsonify({"error": f"Internal critical accounting ledger error tracking database save: {str(e)}"}), 500
+
+
+
+
+@main.route('/api/cashless-transaction/<int:tx_id>/verify', methods=['POST'])
+@login_required
+@roles_required('owner')
+@shop_required
+def verify_cashless_transaction(tx_id):
+    shop_id = session.get('shop_id')
+    
+    # Query row entry asserting correct tenant scoping ownership isolation
+    transaction = CashlessTransaction.query.filter_by(id=tx_id, shop_id=shop_id).first()
+    
+    if not transaction:
+        return jsonify({"error": "Transaction log entry not found or unauthorized access"}), 404
+        
+    try:
+        # Reconcile book value flag
+        transaction.verified = True
+        db.session.commit()
+        return jsonify({"message": "Transaction verified and inventory records reconciled."}), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": f"Database mutation crash tracking anomaly: {str(e)}"}), 500
+
+
+@main.route('/financials', methods=['GET'])
+@login_required
+@roles_required('owner')
+@shop_required
+def financial_management():
+    # Render your new interface context page here
+    return render_template('main/financial_management.html')
+
+
+@main.route('/api/financials/management-data', methods=['GET'])
+@login_required
+@roles_required('owner')
+@shop_required
+def get_financial_management_data_api():
+    shop_id = session.get('shop_id')
+    
+    # 1. Fetch all products belonging to the active isolated tenant shop profile
+    products = Product.query.filter_by(shop_id=shop_id).all()
+    
+    under_priced = []  # Stores items where cost per unit >= selling price
+
+    for product in products:
+        b_price = product.batch_price or 0.0
+        b_size = product.batch_size or 1  # Default fallback constraint if structural integer is missing
+
+        # Guard against zero division errors safely
+        if b_size <= 0:
+            continue
+
+        # Calculate cost per unit (min_price_per_product)
+        min_price_per_product = b_price / b_size
+        
+        # In your model, product.price represents the selling unit_price
+        selling_price = product.price or 0.0
+
+        # Evaluation Condition: If cost per unit is greater than or equal to selling price
+        if min_price_per_product >= selling_price:
+            under_priced.append({
+                "product_id": product.id,
+                "name": product.name,
+                "category": product.category or "-",
+                "min_price_per_product": round(min_price_per_product, 2),
+                "selling_price": round(selling_price, 2),
+                "margin_loss": round(min_price_per_product - selling_price, 2)
+            })
+
+    return jsonify({
+        "status": "success",
+        "shop_id": shop_id,
+        "total_products_checked": len(products),
+        "under_priced_count": len(under_priced),
+        "under_priced": under_priced  # Returns the array of matching objects
+    }), 200
+
+
+
+#lets create a route that get all product and lists all the profict magins per product
+@main.route('/api/financials/profit-margins', methods=['GET'])
+@login_required
+@roles_required('owner')
+@shop_required
+def get_profit_margins_api():
+    shop_id = session.get('shop_id')
+    
+    # Fetch all products for the active shop
+    products = Product.query.filter_by(shop_id=shop_id).all()
+    
+    profit_margins = []
+
+    for product in products:
+        b_price = product.batch_price or 0.0
+        b_size = product.batch_size or 1
+
+        if b_size <= 0:
+            continue
+
+        min_price_per_product = b_price / b_size
+        selling_price = product.price or 0.0
+
+        margin = selling_price - min_price_per_product
+        profit_margins.append({
+            "product_id": product.id,
+            "name": product.name,
+            "category": product.category or "-",
+            "min_price_per_product": round(min_price_per_product, 2),
+            "selling_price": round(selling_price, 2),
+            "profit_margin": round(margin, 2)
+        })
+
+    return jsonify({
+        "status": "success",
+        "shop_id": shop_id,
+        "total_products_checked": len(products),
+        "profit_margins": profit_margins
+    }), 200
+
+
+
+@main.route('/api/financials/business-health', methods=['GET'])
+@login_required
+@roles_required('owner')
+@shop_required
+def get_business_health_analysis_api():
+    shop_id = session.get('shop_id')
+    
+    # Fetch all products belonging to the active shop
+    products = Product.query.filter_by(shop_id=shop_id).all()
+    
+    product_breakdown = []
+    total_restock_budget_needed = 0.0
+    total_realised_revenue = 0.0
+    total_realised_profit = 0.0
+
+    for product in products:
+        # 1. Determine sales since last batch delivery day (NP)
+        last_received_log = StockReceivedLog.query.filter_by(
+            shop_id=shop_id, 
+            product_id=product.id
+        ).order_by(StockReceivedLog.date.desc()).first()
+        
+        np = 0
+        if last_received_log:
+            sales_since_delivery = db.session.query(func.sum(SaleItem.quantity))\
+                .select_from(SaleItem)\
+                .join(Sale, SaleItem.sale_id == Sale.id)\
+                .filter(
+                    Sale.shop_id == shop_id,
+                    SaleItem.product_id == product.id,
+                    func.date(Sale.timestamp) >= last_received_log.date
+                ).scalar()
+            np = int(sales_since_delivery or 0)
+        else:
+            sales_historical = db.session.query(func.sum(SaleItem.quantity))\
+                .filter(SaleItem.product_id == product.id).scalar()
+            np = int(sales_historical or 0)
+
+        # 2. Extract pricing metrics
+        live_qty = int(product.live_inventory.quantity if product.live_inventory else 0)
+        selling_price = float(product.price or 0.0)
+        batch_cost = float(product.batch_price or 0.0)
+        batch_size = int(product.batch_size or 1)
+        
+        if batch_size <= 0:
+            batch_size = 1
+
+        # 3. Core Formulation Logic
+        unit_cost = batch_cost / batch_size
+        
+        # Actual cash generated by this product from real sales
+        product_revenue = np * selling_price
+        
+        # CRITICAL: This is the money you MUST save from your sales to afford the next batch
+        product_restock_budget = np * unit_cost
+        
+        # True profit earned from actual sales after deducting the replacement cost
+        product_profit = product_revenue - product_restock_budget
+
+        # Accumulate shop-wide metrics
+        total_restock_budget_needed += product_restock_budget
+        total_realised_revenue += product_revenue
+        total_realised_profit += product_profit
+
+        product_breakdown.append({
+            "product_id": product.id,
+            "product_name": product.name,
+            "live_quantity": live_qty,
+            "units_sold_since_delivery": np,
+            "unit_cost": round(unit_cost, 2),
+            "revenue_earned": round(product_revenue, 2),
+            "allocated_restock_budget": round(product_restock_budget, 2),
+            "realised_profit": round(product_profit, 2)
+        })
+
+    # 4. Strategic Business Quality Evaluation
+    # If the owner took more money out than total_realised_profit, they are dipping into stock money
+    business_quality = (
+        f"To restock your store seamlessly, you must have R {round(total_restock_budget_needed, 2)} "
+        f"saved in your bank account right now. Your true real-world profit so far is R {round(total_realised_profit, 2)}."
+    )
+    
+    if total_realised_profit > 0:
+        health_status_code = "HEALTHY"
+    else:
+        health_status_code = "WARNING"
+
+    return jsonify({
+        "status": "success",
+        "shop_id": shop_id,
+        "business_quality": business_quality,
+        "health_status_code": health_status_code,
+        "summary": {
+            "total_realised_revenue": round(total_realised_revenue, 2),
+            "total_restock_budget_to_save": round(total_restock_budget_needed, 2),
+            "total_realised_profit": round(total_realised_profit, 2),
+            "total_products_tracked": len(products)
+        },
+        "products": product_breakdown
+    }), 200
+        

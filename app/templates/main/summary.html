@@ -4,7 +4,35 @@
 
 {% block content %}
 <div class="container mt-5 text-center">
-  <h2 class="mb-4">Inventory Summary</h2>
+  
+  <!-- NEW: Navigation Header Deck with Financials Management Redirection Action -->
+  <div class="d-flex flex-column flex-sm-row justify-content-between align-items-center border-bottom border-secondary pb-3 mb-4 gap-3">
+    <div class="text-start">
+      <h2 class="mb-0 fw-bold text-white">Inventory Summary</h2>
+      <p class="text-secondary small mb-0">Real-time data visualization and stock telemetry</p>
+    </div>
+    <div>
+      <a href="{{ url_for('main.financial_management') }}" class="btn btn-primary d-inline-flex align-items-center gap-2 px-4 shadow">
+        📊 Financials Management &rarr;
+      </a>
+    </div>
+  </div>
+
+  <!-- NEW: Unverified Internal Usage Alerts Panel (Pops in Red for Owner Action) -->
+  <div id="cashless-alert-panel" class="mb-4 text-start d-none">
+    <div class="card bg-dark border-danger mb-3 shadow">
+      <div class="card-header bg-danger text-white fw-bold d-flex justify-content-between align-items-center">
+        <span>⚠️ Action Required: Review Internal Inventory Usage</span>
+        <span class="badge bg-dark text-danger px-2 py-1" id="cashless-badge-count">0 Pending</span>
+      </div>
+      <div class="card-body bg-opacity-10 bg-danger p-3">
+        <p class="text-white-50 small mb-3">The following items were registered as personal usage or allocation by operators. Review and verify these changes to reconcile system book values.</p>
+        <div class="row g-3" id="cashless-transactions-list-container">
+          <!-- Injected via JavaScript dynamically -->
+        </div>
+      </div>
+    </div>
+  </div>
 
   <!-- Dashboard View Controls -->
   <div class="row g-3 justify-content-center align-items-end mb-4 text-start">
@@ -42,14 +70,13 @@
       🔍 Analyze Inventory Discrepancies
     </button>
 
-    <!-- Discrepancy Display Container (Re-integrated Tabular + Timeline View Block) -->
+    <!-- Discrepancy Display Container -->
     <div id="audit-discrepancy-container" class="card bg-dark border-info overflow-hidden mt-3 d-none">
       <div class="card-header bg-info text-dark fw-bold d-flex justify-content-between align-items-center">
         <span>🚨 Real-Time Audit Discrepancies & Sales Timeline</span>
         <button class="btn-close" onclick="toggleAuditView()" aria-label="Close"></button>
       </div>
       
-      <!-- Part 1: Tabular Structure Matrix View -->
       <div class="table-responsive">
         <table class="table table-dark table-striped table-hover align-middle mb-0 text-center">
           <thead>
@@ -71,8 +98,6 @@
           </tbody>
         </table>
       </div>
-      
-      <!-- Part 2: Chronological Text Timeline Target Box (Injected dynamically via audit.js) -->
     </div>
   </div>
 
@@ -98,7 +123,6 @@
 
   <!-- Chart & Daily Breakdown Section -->
   <div class="row mb-5" id="charts-and-trends-section">
-    <!-- Past 7 Days Revenue Table -->
     <div class="col-lg-5 mb-4 mb-lg-0">
       <div class="card bg-dark border-secondary overflow-hidden h-100">
         <div class="card-header bg-success text-dark fw-bold" id="table-header-title">
@@ -122,7 +146,6 @@
       </div>
     </div>
 
-    <!-- Sales Trend Chart Area -->
     <div class="col-lg-7">
       <div class="card bg-dark border-secondary p-3 h-100">
         <h5 class="text-info mb-3 text-start" id="chart-title-text">📈 Sales Trend</h5>
@@ -158,7 +181,7 @@
     </div>
   </div>
 
-  <!-- Dynamic Tables Container (Stock-out, Fast Selling, and Top Earning) -->
+  <!-- Dynamic Tables Container -->
   <div id="tables-container" class="container mt-5 px-0"></div>
 
   <div class="mt-4 mb-5">
@@ -168,8 +191,7 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="https://jsdelivr.net"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.min.js"></script>
 <script src="{{ url_for('static', filename='js/summary.js') }}"></script>
-<!-- New Isolated Script Architecture Component -->
 <script src="{{ url_for('static', filename='js/audit.js') }}"></script>
 {% endblock %}

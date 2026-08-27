@@ -28,11 +28,13 @@ def get_product_discrepancies_timeline(shop_id):
         if live_qty == audited_qty:
             continue
 
-        # Save counts metadata dictionary
+        # FIXED: Add selling_price and last_audit_date here so the values aren't empty/0.0
         counts_metadata[p.id] = {
             "product_name": p.name,
             "live_quantity": live_qty,
-            "audited_quantity": audited_qty
+            "audited_quantity": audited_qty,
+            "selling_price": p.price,                              # Pulls from Product model
+            "last_audit_date": last_audit.date.strftime('%Y-%m-%d') # Pulls from Physical count model
         }
 
         # Fetch sales since physical verification log

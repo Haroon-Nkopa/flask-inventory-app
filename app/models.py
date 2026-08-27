@@ -3,7 +3,6 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_login import UserMixin
 
 
-
 db = SQLAlchemy()
 
 #  1. Association Table for Many-to-Many Relationships
@@ -237,6 +236,7 @@ class CashlessTransaction(db.Model):
     # Categorization strings matching your HTML drop-down choices
     allocation_type = db.Column(db.String(50), nullable=False) # 'personal', 'stoloto', or 'other'
     explanation = db.Column(db.Text, nullable=True)            # Text from explanation field if 'other' is used
+    verified = db.Column(db.Boolean, default=False, nullable=True) # Flag for internal review and approval
 
     # Timezone-aware date tracking matching your other operational tables
     date = db.Column(
@@ -257,3 +257,34 @@ class CashlessTransaction(db.Model):
 
     def __repr__(self):
         return f"<CashlessTransaction {self.allocation_type.upper()} - Product ID {self.product_id} x{self.quantity}>"
+
+
+class StockReceivedLog(db.Model):
+    __tablename__ = 'stock_received_log'
+
+    id = db.Column(db.Integer, primary_key=True)
+    shop_id = db.Column(db.Integer, db.ForeignKey('shop.id'), nullable=False)
+    product_id = db.Column(db.Integer, db.ForeignKey('product.id'), nullable=False)
+    
+    # Track exactly how many items were checked into the delivery box
+    quantity_received = db.Column(db.Integer, nullable=False, default=0)
+    
+    # Automatically tracks the calendar day of this specific product arrival
+    date = db.Column(
+        db.Date, 
+        nullable=False, 
+        default=lambda: datetime.now(timezone.utc).date()
+    )
+
+    # Relationships for quick join queries and cross-referencing
+    shop = db.relationship("Shop")
+    product = db.relationship("Product")
+
+    __table_args__ = (
+        # A shop can only log receiving a specific product ONCE per calendar day.
+        # If they receive more later that day, your backend can just update the quantity_received.
+        db.UniqueConstraint('shop_id', 'product_id', 'date', name='unique_product_received_per_shop_per_day'),
+    )
+
+    def __repr__(self):
+        return f"<StockReceivedLog Shop {self.shop_id} - Product {self.product_id} Qty: {self.quantity_received} on {self.date}>"

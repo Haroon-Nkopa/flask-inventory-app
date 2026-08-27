@@ -34,9 +34,12 @@ function fetchInventoryDiscrepancies() {
         </tr>
     `;
 
-    // Remove prior lookup blocks if any
+    // Remove prior lookup layouts safely
     const oldTimeline = document.getElementById('audit-timeline-narrative-block');
     if (oldTimeline) oldTimeline.remove();
+
+    const oldSummary = document.getElementById('audit-loss-summary-block');
+    if (oldSummary) oldSummary.remove();
 
     fetch('/api/inventory/discrepancies', {
         method: 'GET',
@@ -50,11 +53,15 @@ function fetchInventoryDiscrepancies() {
         return response.json();
     })
     .then(data => {
+        // ENGINE TRACE LOG: Open your browser inspect terminal (F12) to see exactly what keys your Python app outputs
+        console.log("REAL DATABASE API RAW DATA STREAM:", data);
+
         tableBody.innerHTML = ''; 
 
-        // Safely parse out tabular data regardless of whether it's an array or key-value object
-        const records = Array.isArray(data.tabular_data) ? data.tabular_data : 
-                        Object.keys(data.tabular_data).map(id => ({ product_id: id, ...data.tabular_data[id] }));
+        // Handle structural payload parsing dynamically
+        const rawRecords = data.tabular_data || data.losses || data.display || data;
+        const records = Array.isArray(rawRecords) ? rawRecords : 
+                        Object.keys(rawRecords || {}).map(id => ({ product_id: id, ...rawRecords[id] }));
 
         if (records.length === 0) {
             tableBody.innerHTML = `
@@ -67,12 +74,31 @@ function fetchInventoryDiscrepancies() {
             return;
         }
 
+        let totalLossSum = 0;
+        let missingProductsPointsHtml = '';
+        let hasLosses = false;
+
         // 1. RENDER TABULAR RECORDS WITH CLICK EVENT TRAPS
         records.forEach(item => {
-            // Guarantee layout variables exist
-            const liveQty = item.live_quantity ?? 0;
-            const auditedQty = item.audited_quantity ?? 0;
-            const difference = auditedQty - liveQty;
+            const liveQty = Number(item.live_quantity) || 0;
+            const auditedQty = Number(item.audited_quantity) || 0;
+            const difference = auditedQty - liveQty; 
+
+            // Strict database mapping: No false values or hardcoding
+            const sellingPrice = Number(item.selling_price) || Number(item.price) || 0;
+
+            if (difference < 0) {
+                hasLosses = true;
+                const missingCount = Math.abs(difference); 
+                const productLossValue = missingCount * sellingPrice;
+                totalLossSum += productLossValue;
+
+                missingProductsPointsHtml += `
+                    <li class="mb-1 text-light">
+                        We have <strong>${missingCount} ${escapeHtml(item.product_name)}</strong> missing, that's <strong>R${productLossValue.toFixed(2)}</strong> lost
+                    </li>
+                `;
+            }
 
             const row = document.createElement('tr');
             row.style.cursor = 'pointer';
@@ -96,7 +122,6 @@ function fetchInventoryDiscrepancies() {
                 document.querySelectorAll('#audit-discrepancy-body tr').forEach(r => r.classList.remove('table-info', 'text-dark'));
                 this.classList.add('table-info', 'text-dark');
                 
-                // Pack full item details cleanly down to the click listener
                 showSpecificProductTimeline({
                     product_id: item.product_id,
                     product_name: item.product_name
@@ -106,7 +131,32 @@ function fetchInventoryDiscrepancies() {
             tableBody.appendChild(row);
         });
 
-        // 2. BUILD TIMELINE ELEMENTS
+        // 2. APPEND THE REQUESTED LOSS SUMMARY LIST AT THE BOTTOM OF THE CONTAINER DIV
+        if (hasLosses) {
+            const startDateStr = data.last_audit_date || '{lasted date}';
+            const endDateStr = data.today_date || '{today}';
+
+            const summaryBlock = document.createElement('div');
+            summaryBlock.id = 'audit-loss-summary-block';
+            summaryBlock.className = 'card-footer bg-dark border-top border-danger p-3 mt-3 text-start';
+
+            summaryBlock.innerHTML = `
+                <h6 class="text-danger fw-bold mb-2">📉 Discrepancy Breakdown & Stock Loss Points:</h6>
+                <p class="text-secondary small mb-2 fst-italic">
+                    Rule: Using variance evaluation. If difference is less than 0, then we have that much lost products.
+                </p>
+                <ul class="mb-3 ps-3">
+                    ${missingProductsPointsHtml}
+                </ul>
+                <div class="fw-semibold text-warning border-top border-secondary pt-2">
+                    From ${startDateStr} to ${endDateStr} there is <span class="text-danger fw-bold fs-5">R${totalLossSum.toFixed(2)}</span> missing.
+                </div>
+            `;
+            
+            tableContainer.appendChild(summaryBlock);
+        }
+
+        // 3. BUILD TIMELINE ELEMENTS
         const timelineBlock = document.createElement('div');
         timelineBlock.id = 'audit-timeline-narrative-block';
         timelineBlock.className = 'card-body border-top border-secondary p-3 text-start bg-dark';
@@ -165,6 +215,8 @@ function fetchInventoryDiscrepancies() {
         `;
     });
 }
+
+
 
 /**
  * Isolates and changes display states for the target timeline and binds the action panel
