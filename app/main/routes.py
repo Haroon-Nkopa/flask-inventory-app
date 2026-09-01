@@ -14,7 +14,6 @@ from .helper import  execute_inventory_merge, get_product_discrepancies_timeline
 
 
 
-
 @main.route('/', methods=['GET', 'POST']) 
 def enter_shop():
     
@@ -979,64 +978,67 @@ def add_new_stock_api():
         return jsonify({"error": "Failed to update live inventory balances", "details": str(e)}), 500
 
 
-@main.route('/api/inventory/discrepancies', methods=['GET'])
-@login_required
-def api_get_inventory_discrepancies():
-    shop_id = session.get('current_shop_id')
+# @main.route('/api/inventory/discrepancies', methods=['GET'])
+# @login_required
+# def api_get_inventory_discrepancies():
+#     shop_id = session.get('current_shop_id')
 
-    if not shop_id:
-        return jsonify({
-            'message': 'No active shop context selected. Please select a shop first.'
-        }), 400
+#     if not shop_id:
+#         return jsonify({
+#             'message': 'No active shop context selected. Please select a shop first.'
+#         }), 400
 
-    try:
-        # 1. Run your original helper function exactly as it stands
-        counts_metadata, timeline_phrases = get_product_discrepancies_timeline(shop_id)
+#     try:
+#         # 1. Run your original helper function exactly as it stands
+#         counts_metadata, timeline_phrases = get_product_discrepancies_timeline(shop_id)
+#         print(counts_metadata)
 
-        formatted_tabular_data = []
-        oldest_audit_date = None
+#         formatted_tabular_data = []
+#         oldest_audit_date = None
 
-        # 2. Complete the data map using the actual models
-        for product_id, item_data in counts_metadata.items():
+#         # 2. Complete the data map using the actual models
+#         for product_id, item_data in counts_metadata.items():
+#             print(product_id)
+#             # Direct database lookups for the items left out by the helper
+#             product = db.session.query(Product).get(product_id)
+#             selling_price = product.price if product else 0.0
             
-            # Direct database lookups for the items left out by the helper
-            product = db.session.query(Product).get(product_id)
-            selling_price = product.price if product else 0.0
 
-            last_audit = db.session.query(PhysicalInventoryCount)\
-                .filter(PhysicalInventoryCount.product_id == product_id)\
-                .order_by(PhysicalInventoryCount.timestamp.desc())\
-                .first()
+#             last_audit = db.session.query(PhysicalInventoryCount)\
+#                 .filter(PhysicalInventoryCount.product_id == product_id)\
+#                 .order_by(PhysicalInventoryCount.timestamp.desc())\
+#                 .first()
             
-            last_audit_str = last_audit.date.strftime('%Y-%m-%d') if last_audit else None
+#             last_audit_str = last_audit.date.strftime('%Y-%m-%d') if last_audit else None
 
-            # Calculate oldest audit date for the summary range block
-            if last_audit_str:
-                if oldest_audit_date is None or last_audit_str < oldest_audit_date:
-                    oldest_audit_date = last_audit_str
+#             # Calculate oldest audit date for the summary range block
+#             if last_audit_str:
+#                 if oldest_audit_date is None or last_audit_str < oldest_audit_date:
+#                     oldest_audit_date = last_audit_str
 
-            formatted_tabular_data.append({
-                "product_id": product_id,
-                "product_name": item_data.get("product_name", ""),
-                "live_quantity": item_data.get("live_quantity", 0),
-                "audited_quantity": item_data.get("audited_quantity", 0),
-                "selling_price": float(selling_price) # Guarantees JavaScript gets a clean number
-            })
+                 
+#             formatted_tabular_data.append({
+#                 "product_id": product_id,
+#                 "product_name": item_data.get("product_name", ""),
+#                 "live_quantity": item_data.get("live_quantity", 0),
+#                 "audited_quantity": item_data.get("audited_quantity", 0),
+#                 "selling_price": float(selling_price) # Guarantees JavaScript gets a clean number
+#             })
+        
+#         return jsonify({
+#             "status": "success",
+#             "tabular_data": formatted_tabular_data,
+#             "timeline_data": timeline_phrases,
+#             "last_audit_date": oldest_audit_date if oldest_audit_date else "the last count date",
+#             "today_date": datetime.now(timezone.utc).strftime("%Y-%m-%d")
+#         }), 200
 
-        return jsonify({
-            "status": "success",
-            "tabular_data": formatted_tabular_data,
-            "timeline_data": timeline_phrases,
-            "last_audit_date": oldest_audit_date if oldest_audit_date else "the last count date",
-            "today_date": datetime.now(timezone.utc).strftime("%Y-%m-%d")
-        }), 200
-
-    except Exception as e:
-        print("DISCREPANCY API ERROR:", str(e))
-        return jsonify({
-            "status": "error",
-            "error": str(e)
-        }), 500
+#     except Exception as e:
+#         print("DISCREPANCY API ERROR:", str(e))
+#         return jsonify({
+#             "status": "error",
+#             "error": str(e)
+#         }), 500
 
 
 

@@ -83,14 +83,15 @@ function fetchInventoryDiscrepancies() {
             const liveQty = Number(item.live_quantity) || 0;
             const auditedQty = Number(item.audited_quantity) || 0;
             const difference = auditedQty - liveQty; 
-
-            // Strict database mapping: No false values or hardcoding
+           
             const sellingPrice = Number(item.selling_price) || Number(item.price) || 0;
+          
 
             if (difference < 0) {
                 hasLosses = true;
                 const missingCount = Math.abs(difference); 
                 const productLossValue = missingCount * sellingPrice;
+                
                 totalLossSum += productLossValue;
 
                 missingProductsPointsHtml += `

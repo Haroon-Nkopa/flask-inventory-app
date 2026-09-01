@@ -36,6 +36,7 @@ def get_product_discrepancies_timeline(shop_id):
             "selling_price": p.price,                              # Pulls from Product model
             "last_audit_date": last_audit.date.strftime('%Y-%m-%d') # Pulls from Physical count model
         }
+        
 
         # Fetch sales since physical verification log
         sales_since_audit = db.session.query(
