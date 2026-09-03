@@ -15,5 +15,4 @@ logs/
 # Environment
 .env
 
-# Config file
-config.py
+
