@@ -362,7 +362,9 @@ def submit_stock_api():
         db.session.rollback()
         return jsonify({"error": "Failed to save physical count records", "details": str(e)}), 500
 
-#####
+####
+from datetime import datetime, timezone
+
 @main.route('/api/inventory/discrepancies', methods=['GET'])
 @login_required
 @roles_required('owner')
@@ -374,22 +376,37 @@ def get_discrepancies_api():
         # Unpack the underlying engine helper tuple payload data
         counts_data, timeline_data = get_product_discrepancies_timeline(shop_id)
         
-        # Structure the final list format calculating variance variations dynamically
         tabular_mismatches = []
+        oldest_audit_date = None
+
+        # Structure the final list format calculating variance variations dynamically
         for prod_id, info in counts_data.items():
             variance = info['live_quantity'] - info['audited_quantity']
+            
+            # Extract selling price passed down from the engine dictionary payload
+            selling_price = info.get('selling_price', 0.0)
+            
+            # Extract the raw string date for tracking the global range
+            last_audit_str = info.get('last_audit_date')
+            if last_audit_str:
+                if oldest_audit_date is None or last_audit_str < oldest_audit_date:
+                    oldest_audit_date = last_audit_str
+
             tabular_mismatches.append({
                 "product_id": prod_id,
                 "product_name": info['product_name'],
                 "live_quantity": info['live_quantity'],
                 "audited_quantity": info['audited_quantity'],
-                "difference": variance
+                "difference": variance,
+                "selling_price": float(selling_price) # Guarantees JavaScript gets a clean number
             })
             
         return jsonify({
             "status": "success",
             "tabular_data": tabular_mismatches,
-            "timeline_data": timeline_data
+            "timeline_data": timeline_data,
+            "last_audit_date": oldest_audit_date if oldest_audit_date else "the last count date",
+            "today_date": datetime.now(timezone.utc).strftime("%Y-%m-%d")
         }), 200
         
     except Exception as e:
@@ -398,7 +415,6 @@ def get_discrepancies_api():
             "status": "error",
             "message": "Failed to parse underlying database query streams."
         }), 500
-
 
 
 # UI Route - Stays light, just serves the dashboard shell
@@ -983,11 +999,7 @@ def add_new_stock_api():
 # def api_get_inventory_discrepancies():
 #     shop_id = session.get('current_shop_id')
 
-#     if not shop_id:
-#         return jsonify({
-#             'message': 'No active shop context selected. Please select a shop first.'
-#         }), 400
-
+ 
 #     try:
 #         # 1. Run your original helper function exactly as it stands
 #         counts_metadata, timeline_phrases = get_product_discrepancies_timeline(shop_id)

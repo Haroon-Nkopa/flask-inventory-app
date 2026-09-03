@@ -86,7 +86,6 @@ function fetchInventoryDiscrepancies() {
            
             const sellingPrice = Number(item.selling_price) || Number(item.price) || 0;
           
-
             if (difference < 0) {
                 hasLosses = true;
                 const missingCount = Math.abs(difference); 
