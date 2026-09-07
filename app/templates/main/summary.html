@@ -3,26 +3,20 @@
 {% block title %}Inventory Summary | StockWise{% endblock %}
 
 {% block content %}
-<div class="container mt-5 text-center">
+<!-- FIX: Changed 'text-center' to 'text-start' on the main container so layout floats naturally on desktop -->
+<div class="container mt-5 text-start">
   
-  <!-- NEW: Navigation Header Deck with Financials Management Redirection Action -->
+  <!-- Navigation Header Deck -->
   <div class="d-flex flex-column flex-sm-row justify-content-between align-items-center border-bottom border-secondary pb-3 mb-4 gap-3">
-    <div class="text-start">
+    <div>
       <h2 class="mb-0 fw-bold text-white">Inventory Summary</h2>
       <p class="text-secondary small mb-0">Real-time data visualization and stock telemetry</p>
     </div>
-    <!--  finance funactionality is still pre mature, will hide for now -->
-    <!--   
-    <div>
-      <a href="{{ url_for('main.financial_management') }}" class="btn btn-primary d-inline-flex align-items-center gap-2 px-4 shadow">
-        📊 Financials Management &rarr;
-      </a>
-    </div>
-    </div>
-  -->
+    <!-- finance functionality hidden for now -->
+  </div>
 
-  <!-- NEW: Unverified Internal Usage Alerts Panel (Pops in Red for Owner Action) -->
-  <div id="cashless-alert-panel" class="mb-4 text-start d-none">
+  <!-- Unverified Internal Usage Alerts Panel -->
+  <div id="cashless-alert-panel" class="mb-4 d-none">
     <div class="card bg-dark border-danger mb-3 shadow">
       <div class="card-header bg-danger text-white fw-bold d-flex justify-content-between align-items-center">
         <span>⚠️ Action Required: Review Internal Inventory Usage</span>
@@ -37,9 +31,9 @@
     </div>
   </div>
 
-  <!-- Dashboard View Controls -->
-  <div class="row g-3 justify-content-center align-items-end mb-4 text-start">
-    <div class="col-md-4">
+  <!-- Dashboard View Controls Grid -->
+  <div class="row g-3 align-items-end mb-4">
+    <div class="col-lg-4 col-md-4">
       <label for="summaryType" class="form-label text-secondary small fw-bold text-uppercase">Report Scope</label>
       <select id="summaryType" class="form-select bg-dark text-white border-secondary" onchange="toggleViewContext()">
         <option value="live">Live Summary (Real-time Sales)</option>
@@ -48,8 +42,8 @@
       </select>
     </div>
     
-    <!-- Mini Date Range Picker Form (Hidden by default for Live mode) -->
-    <div class="col-md-6" id="dateFiltersForm" style="display: none;">
+    <!-- Mini Date Range Picker Form -->
+    <div class="col-lg-6 col-md-6" id="dateFiltersForm" style="display: none;">
       <div class="row g-2">
         <div class="col-6">
           <label for="startDate" class="form-label text-secondary small fw-bold text-uppercase">From</label>
@@ -62,13 +56,13 @@
       </div>
     </div>
     
-    <div class="col-md-2" id="filterSubmitBtnWrapper" style="display: none;">
+    <div class="col-lg-2 col-md-2" id="filterSubmitBtnWrapper" style="display: none;">
       <button class="btn btn-success w-100" onclick="loadSummaryData()">Apply Range</button>
     </div>
   </div>
 
-  <div class="mb-4 text-start">
-    <!-- Audit Control Trigger -->
+  <!-- Audit Control Section -->
+  <div class="mb-4">
     <button class="btn btn-outline-info" id="toggle-audit-btn" onclick="toggleAuditView()">
       🔍 Analyze Inventory Discrepancies
     </button>
@@ -81,6 +75,7 @@
       </div>
       
       <div class="table-responsive">
+        <!-- FIX: Ensured table alignment states 'text-start' on critical labels like Name -->
         <table class="table table-dark table-striped table-hover align-middle mb-0 text-center">
           <thead>
             <tr>
@@ -106,28 +101,28 @@
 
   <div id="summary-alert" class="alert alert-success d-none"></div>
 
-  <!-- Key Metrics Row (Revenue & Potential Profit) -->
-  <div class="row mb-5 g-3">
+  <!-- Key Metrics Card Row -->
+  <div class="row mb-4 g-3">
     <div class="col-md-6" id="revenue-card-container">
-      <div class="card bg-dark border-success p-3 h-100">
-        <h6 class="text-success text-uppercase small fw-bold">Actual Revenue</h6>
-        <h2 id="actual-revenue" class="text-white">R 0.00</h2>
-        <p id="revenue-card-subtext" class="text-secondary mb-0">Money already in the till</p>
+      <div class="card bg-dark border-success p-4 h-100 shadow-sm">
+        <h6 class="text-success text-uppercase small fw-bold mb-1">Actual Revenue</h6>
+        <h2 id="actual-revenue" class="text-white fw-bold display-6">R 0.00</h2>
+        <p id="revenue-card-subtext" class="text-secondary small mb-0">Money already in the till</p>
       </div>
     </div>
     <div class="col-md-6" id="profit-card-container">
-      <div class="card bg-dark border-warning p-3 h-100">
-        <h6 class="text-warning text-uppercase small fw-bold">Potential Profit (Unrealized)</h6>
-        <h2 id="potential-profit" class="text-white">R 0.00</h2>
-        <p class="text-secondary mb-0">If all current stock sells out</p>
+      <div class="card bg-dark border-warning p-4 h-100 shadow-sm">
+        <h6 class="text-warning text-uppercase small fw-bold mb-1">Potential Profit (Unrealized)</h6>
+        <h2 id="potential-profit" class="text-white fw-bold display-6">R 0.00</h2>
+        <p class="text-secondary small mb-0">If all current stock sells out</p>
       </div>
     </div>
   </div>
 
   <!-- Chart & Daily Breakdown Section -->
-  <div class="row mb-5" id="charts-and-trends-section">
-    <div class="col-lg-5 mb-4 mb-lg-0">
-      <div class="card bg-dark border-secondary overflow-hidden h-100">
+  <div class="row mb-5 g-4" id="charts-and-trends-section">
+    <div class="col-xl-5 col-lg-6">
+      <div class="card bg-dark border-secondary overflow-hidden h-100 shadow-sm">
         <div class="card-header bg-success text-dark fw-bold" id="table-header-title">
           🗓️ Daily Revenue Timeline
         </div>
@@ -141,7 +136,7 @@
             </thead>
             <tbody id="weekly-revenues-body">
               <tr>
-                <td colspan="2" class="text-muted">Loading timeline data...</td>
+                <td colspan="2" class="text-muted py-4">Loading timeline data...</td>
               </tr>
             </tbody>
           </table>
@@ -149,10 +144,10 @@
       </div>
     </div>
 
-    <div class="col-lg-7">
-      <div class="card bg-dark border-secondary p-3 h-100">
-        <h5 class="text-info mb-3 text-start" id="chart-title-text">📈 Sales Trend</h5>
-        <div class="position-relative style-chart-wrapper" style="height: 250px;">
+    <div class="col-xl-7 col-lg-6">
+      <div class="card bg-dark border-secondary p-4 h-100 shadow-sm">
+        <h5 class="text-info mb-3 fw-bold" id="chart-title-text">📈 Sales Trend</h5>
+        <div class="position-relative style-chart-wrapper" style="min-height: 280px; height: 100%;">
           <canvas id="salesChart"></canvas>
         </div>
       </div>
@@ -160,7 +155,7 @@
   </div>
 
   <!-- Specialized Audited Table Wrapper -->
-  <div id="audit-log-container" class="card bg-dark border-secondary overflow-hidden mb-5 d-none text-start">
+  <div id="audit-log-container" class="card bg-dark border-secondary overflow-hidden mb-5 d-none">
     <div class="card-header bg-info text-dark fw-bold">
       📋 Stock Correction & User Audit Logs
     </div>
@@ -177,7 +172,7 @@
         </thead>
         <tbody id="audit-logs-body">
           <tr>
-            <td colspan="5" class="text-center text-muted">No audit logs found for this window.</td>
+            <td colspan="5" class="text-center text-muted py-4">No audit logs found for this window.</td>
           </tr>
         </tbody>
       </table>
@@ -185,16 +180,17 @@
   </div>
 
   <!-- Dynamic Tables Container -->
-  <div id="tables-container" class="container mt-5 px-0"></div>
+  <div id="tables-container" class="container px-0 mb-5"></div>
 
-  <div class="mt-4 mb-5">
-    <a href="{{ url_for('main.shop') }}" class="btn btn-outline-light">← Back to Inventory</a>
+  <!-- Back Navigation Button Block -->
+  <div class="mt-4 mb-5 text-start">
+    <a href="{{ url_for('main.shop') }}" class="btn btn-outline-light px-4">← Back to Inventory</a>
   </div>
 </div>
 {% endblock %}
 
 {% block scripts %}
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.min.js"></script>
+<script src="https://jsdelivr.net"></script>
 <script src="{{ url_for('static', filename='js/summary.js') }}"></script>
 <script src="{{ url_for('static', filename='js/audit.js') }}"></script>
 {% endblock %}
