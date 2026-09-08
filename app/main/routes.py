@@ -21,8 +21,9 @@ def enter_shop():
         return redirect(url_for('main.shop'))   
     if request.method == 'POST':
         shop_name = request.form.get('shop_name').strip().title()
+        print(shop_name)
         # Case-insensitive match
-        shop = Shop.query.filter(Shop.name(shop_name)).first()
+        shop = Shop.query.filter(Shop.name == shop_name).first()
         if shop:
             session['shop_id'] = shop.id  # Save to session
             session['shop_name'] = shop.name  # Save shop name to session

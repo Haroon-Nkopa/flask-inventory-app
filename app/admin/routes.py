@@ -1,11 +1,13 @@
 from . import admin_bp
 
 from flask import render_template, request, redirect, url_for, flash, session, abort, jsonify
-from ..models import Shop, db, User
+from ..models import Shop, db, User, Sale, SaleItem, InventoryAuditMerge, CashlessTransaction, StockReceivedLog, PhysicalInventoryCount
 from werkzeug.security import check_password_hash, generate_password_hash
 from flask_login import login_user, logout_user, login_required, current_user
 from functools import wraps
 from ..decorators import roles_required
+from datetime import datetime, timezone
+
 
 @admin_bp.route('/', methods=['GET', 'POST'])
 def admin_login():
@@ -110,3 +112,73 @@ def add_user_to_shop():
 
     shops = Shop.query.all()
     return render_template('admin/add_user_to_shop.html', shops=shops)
+
+
+
+
+@admin_bp.route('/delete_shop', methods=['POST'])
+def delete_shop():
+    shop_id = request.form.get('shop_id') or request.json.get('shop_id')
+    
+    if not shop_id:
+        return jsonify({"status": "error", "message": "Shop ID is required"}), 400
+
+    shop = Shop.query.get(shop_id)
+    if not shop:
+        return jsonify({"status": "error", "message": "Shop not found"}), 404
+
+    try:
+        # 1. Clear high-level records explicitly tied to this shop_id
+        StockReceivedLog.query.filter_by(shop_id=shop.id).delete(synchronize_session=False)
+        CashlessTransaction.query.filter_by(shop_id=shop.id).delete(synchronize_session=False)
+
+        # 2. Extract product IDs to clean up product-level operational logs
+        product_ids = [p.id for p in shop.products]
+        if product_ids:
+            # FIX: Clear all sale items referencing these products to prevent ForeignKeyViolations
+            SaleItem.query.filter(SaleItem.product_id.in_(product_ids)).delete(synchronize_session=False)
+            
+            # Clear remaining product-linked audit lines
+            InventoryAuditMerge.query.filter(InventoryAuditMerge.product_id.in_(product_ids)).delete(synchronize_session=False)
+
+        # 3. Clean up Sales logs belonging to this shop
+        sales = Sale.query.filter_by(shop_id=shop.id).all()
+        sale_ids = [s.id for s in sales]
+        
+        if sale_ids:
+            # Clear any remaining items matching sales buckets, then drop parent sales
+            SaleItem.query.filter(SaleItem.sale_id.in_(sale_ids)).delete(synchronize_session=False)
+            Sale.query.filter_by(shop_id=shop.id).delete(synchronize_session=False)
+
+        # 4. Handle associated Users
+        for user in list(shop.users):
+            # Break the bridge link in the many-to-many join table (`user_shop`)
+            shop.users.remove(user)
+            
+            # If this user is left with no remaining shops, safely purge their complete account profile
+            if len(user.shops) == 0:
+                PhysicalInventoryCount.query.filter_by(user_id=user.id).delete(synchronize_session=False)
+                InventoryAuditMerge.query.filter_by(user_id=user.id).delete(synchronize_session=False)
+                CashlessTransaction.query.filter_by(user_id=user.id).delete(synchronize_session=False)
+                
+                db.session.delete(user)
+
+        # 5. Delete the Shop row
+        # This will now safely drop the Shop, Products, LiveInventory, 
+        # DailyInventorySnapshots, and PhysicalInventoryCounts cleanly.
+        db.session.delete(shop)
+
+        # Commit everything inside a single atomic save point
+        db.session.commit()
+
+        return jsonify({
+            "status": "success", 
+            "message": f"Successfully deleted shop '{shop.name}' and all associated records."
+        }), 200
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({
+            "status": "error", 
+            "message": f"An error occurred during database deletion: {str(e)}"
+        }), 500
