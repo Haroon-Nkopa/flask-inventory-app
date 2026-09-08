@@ -1,0 +1,25 @@
+{% extends 'base.html' %}
+
+{% block title %}404 Not Found | Inventory System{% endblock %}
+
+{% block content %}
+<div class="container d-flex align-items-center justify-content-center" style="min-height: 75vh;">
+    <div class="text-center p-5 rounded-4 shadow-lg" style="background: #10192c; border: 1px solid #2a3550; max-width: 550px; width: 100%;">
+        <!-- Big Styled Error Code -->
+        <h1 class="fw-extrabold mb-2" style="font-size: 6rem; font-weight: 800; background: linear-gradient(45deg, #ef4444, #f59e0b); -webkit-background-clip: text; -webkit-text-fill-color: transparent; line-height: 1;">
+            404
+        </h1>
+        
+        <h3 class="fw-bold text-white mb-3">Workspace Not Found</h3>
+        
+        <p class="text-muted small mb-4">
+            The page, shop registry, or system terminal URL route you requested does not exist or has been removed from the network directory.
+        </p>
+        
+        <!-- Action Button -->
+        <a href="/" class="btn btn-outline-light px-4 py-2 small fw-semibold">
+            ↩️ Return to Dashboard
+        </a>
+    </div>
+</div>
+{% endblock %}

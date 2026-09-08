@@ -1,0 +1,25 @@
+{% extends 'base.html' %}
+
+{% block title %}403 Forbidden | Inventory System{% endblock %}
+
+{% block content %}
+<div class="container d-flex align-items-center justify-content-center" style="min-height: 75vh;">
+    <div class="text-center p-5 rounded-4 shadow-lg" style="background: #10192c; border: 1px solid #2a3550; max-width: 550px; width: 100%;">
+        <!-- Big Styled Error Code -->
+        <h1 class="fw-extrabold mb-2" style="font-size: 6rem; font-weight: 800; background: linear-gradient(45deg, #f59e0b, #d97706); -webkit-background-clip: text; -webkit-text-fill-color: transparent; line-height: 1;">
+            403
+        </h1>
+        
+        <h3 class="fw-bold text-white mb-3">Access Denied</h3>
+        
+        <p class="text-muted small mb-4">
+            Your current account credentials do not hold the required authorization tokens or role privileges to view this specific branch terminal node.
+        </p>
+        
+        <!-- Action Button -->
+        <a href="/" class="btn btn-outline-light px-4 py-2 small fw-semibold">
+            🛡️ Return to Safety
+        </a>
+    </div>
+</div>
+{% endblock %}

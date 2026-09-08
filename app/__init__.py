@@ -1,4 +1,4 @@
-from flask import Flask, send_from_directory
+from flask import Flask, send_from_directory, render_template
 from flask_migrate import Migrate
 from flask_login import LoginManager
 from logging.handlers import RotatingFileHandler
@@ -64,6 +64,18 @@ def create_app():
     def load_user(user_id):
         return User.query.get(int(user_id))
 
+    @app.errorhandler(403)
+    def forbidden_error(error):
+        return render_template('errors/403.html'), 403
+
+    @app.errorhandler(404)
+    def not_found_error(error):
+        return render_template('errors/404.html'), 404
+
+    @app.errorhandler(500)
+    def internal_error(error):
+        db.session.rollback()  # Standard safe rollback for database crashes
+        return render_template('errors/500.html'), 500
 
 
     @app.route('/sw.js')
