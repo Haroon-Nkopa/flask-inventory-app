@@ -48,6 +48,7 @@ def admin_logout():
 
 @admin_bp.route('/shops', methods=['GET', 'POST'])
 @roles_required('admin')
+@login_required
 def register_shop():
     if request.method == 'POST':
         shop_name = request.form['name'].strip()
