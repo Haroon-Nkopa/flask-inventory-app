@@ -50,7 +50,7 @@ def create_app():
 
     # login manager
     login_manager.init_app(app)
-    login_manager.login_view = "auth.admin_login"
+    login_manager.login_view = "auth.login"
     login_manager.login_message_category = "warning"
 
     # register blueprints
