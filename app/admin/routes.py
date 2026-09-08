@@ -42,6 +42,7 @@ def admin_login():
 def admin_logout():
     """Logs out the current administrator."""
     logout_user()
+    session.clear()
     flash('You have logged out of the Admin Portal.', 'info')
     return redirect(url_for('admin.admin_login'))
 
