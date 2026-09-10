@@ -10,6 +10,11 @@
 
       <!-- Button Group converts to a vertical stack on mobile, horizontal row on desktop -->
       <div class="d-flex flex-column flex-sm-row flex-wrap gap-2 w-100 w-md-auto">
+        <!-- PWA Download Button (Hidden by default, shown via JavaScript if available) -->
+        <button id="pwaInstallBtn" class="btn btn-outline-success d-none fw-bold">
+           📲 Download App
+        </button>
+
         <a href="{{ url_for('main.print_stock_sheet') }}"
            target="_blank"
            class="btn btn-dark"
@@ -31,7 +36,7 @@
       </div>
     </div>
 
-    <!-- Shop Name Banner (Replaced inline style with responsive CSS class) -->
+    <!-- Shop Name Banner -->
     <div class="shop-banner d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center gap-3">
         <h3 class="m-0 fs-4 fs-sm-3">🛍️ {{ session.get('shop_name') }}</h3>
         <button id="logoutBtn" 
@@ -79,24 +84,59 @@
 
 {% block scripts %}
 <script>
+    // Global variable to hold the browser installation prompt event
+    let deferredPrompt;
+    const installBtn = document.getElementById('pwaInstallBtn');
+
+    // Listen for the browser's PWA installation prompt offer
+    window.addEventListener('beforeinstallprompt', (e) => {
+        // Prevent the default browser mini-infobar from appearing
+        e.preventDefault();
+        // Save the event so it can be triggered later
+        deferredPrompt = e;
+        // Reveal the download button to the user by removing the Bootstrap 'd-none' class
+        installBtn.classList.remove('d-none');
+    });
+
+    // Handle user clicking the download button
+    installBtn.addEventListener('click', async () => {
+        if (!deferredPrompt) return;
+        
+        // Show the native browser installation prompt
+        deferredPrompt.prompt();
+        
+        // Wait for the user to respond to the prompt
+        const { outcome } = await deferredPrompt.userChoice;
+        console.log(`User response to install request: ${outcome}`);
+        
+        // Clear the saved prompt variable; it can only be used once
+        deferredPrompt = null;
+        
+        // Hide the installation button again
+        installBtn.classList.add('d-none');
+    });
+
+    // Optional: Hide the button if the app is successfully installed
+    window.addEventListener('appinstalled', (evt) => {
+        console.log('StockWise was successfully installed on the device.');
+        installBtn.classList.add('d-none');
+    });
+
+    // Existing Logout Logic
     document.getElementById('logoutBtn').addEventListener('click', async function() {
-        // Get the dynamic URL from the data attribute
         const logoutUrl = this.getAttribute('data-url');
         
         try {
-            // Send secure POST request
             const response = await fetch(logoutUrl, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    // Include CSRF token here if your Flask app requires it
                 }
             });
 
             if (response.ok) {
                 const data = await response.json();
                 if (data.success) {
-                    // Redirect user to the shop login page
                     window.location.href = data.redirect;
                 }
             } else {
@@ -108,6 +148,5 @@
             alert('A network error occurred. Please check your connection.');
         }
     });
-
 </script>
 {% endblock %}
