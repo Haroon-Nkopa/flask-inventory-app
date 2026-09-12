@@ -1,68 +1,53 @@
 # StockWise
 
-StockWise is a Flask web application for managing inventory, point-of-sale transactions, physical stock counts, and shop-level reporting. It is designed for retail businesses that need live stock balances, staff permissions, and an audit trail for inventory changes.
+StockWise is a production-oriented Flask application deployed on Render and backed by PostgreSQL hosted on Neon. This repository is organized as a maintainable web service: application creation is separated from the WSGI entry point, persistence is managed through SQLAlchemy and Alembic, access control is enforced at the route boundary, and database-backed workflows have automated tests.
 
-## Live application
+Live deployment: https://flask-inventory-app-52kj.onrender.com
 
-The application is hosted on Render:
+## Engineering overview
 
-**https://flask-inventory-app-52kj.onrender.com**
+### Application architecture
 
-## Features
+- `app.create_app()` is the application factory. It initializes extensions, authentication, error handlers, logging, and blueprints without coupling them to a single process startup path.
+- Flask blueprints separate authentication, administration, subscriptions, and the main operational API/UI.
+- SQLAlchemy models define the relational domain. Flask-Migrate and Alembic provide versioned schema changes in `migrations/`.
+- Jinja templates provide server-rendered pages, while JavaScript modules consume focused JSON endpoints for interactive workflows.
+- `entryPoint.py` exposes the factory-created application as `app` for Gunicorn and local execution.
 
-### Shop and account management
+### Data and consistency
 
-- Select a shop before entering the workspace.
-- Authenticate users with password-protected accounts and Flask-Login sessions.
-- Support the roles `owner`, `manager`, `employee`, `auditor`, and system `admin`.
-- Restrict shop data and actions according to the active shop and the user role.
-- Allow owners and managers to open the add-user screen for shop staff.
+Production data is stored in a managed Neon PostgreSQL database. Render supplies the connection through `DATABASE_URL`; the configuration normalizes legacy `postgres://` URLs and applies connection pool recycling for a long-running web process. PostgreSQL connection strings should include the SSL settings supplied by Neon.
 
-### Product and inventory management
+The schema represents shops, users, products, live inventory, sales, sale items, daily snapshots, physical counts, audit merges, and cashless transactions. Shop scoping and role/payment decorators are applied before protected handlers execute. Inventory-changing operations validate ownership and availability and persist related records through the SQLAlchemy session.
 
-- Add products with a name, category, size, selling price, batch size, batch price, reorder lower bound, and batch number.
-- Edit product details while preventing duplicate names within a shop.
-- Receive new stock and update the live inventory balance.
-- View live stock, daily inventory snapshots, and physical audit records.
-- Perform one physical stock take per shop per day, with global or product-specific notes.
-- Record the user responsible for each physical count.
-- Download a printable PDF stock sheet for the active shop.
+SQLite remains available as a local fallback and is used by the test fixtures for isolated, disposable databases. It is not a production data store for the deployed service.
 
-### Point of sale
+### Operational concerns
 
-- Browse products and their current live quantities in the POS screen.
-- Build a cart and complete a sale after validating product ownership and available stock.
-- Consolidate duplicate cart lines before checkout.
-- Deduct sold quantities from live inventory and create sale and sale-item records atomically.
-- Record cashless stock allocations as `personal`, `stoloto`, or `other`, with an explanation required for `other`.
+- Production runs behind Gunicorn on Render.
+- Non-debug application logs use a rotating file handler with ten retained files.
+- The global 500 handler rolls back the current database session before rendering the error page.
+- Migrations are applied explicitly with `flask db upgrade`; schema changes should not be introduced by calling `db.create_all()` in production.
+- Secrets and database credentials are supplied through environment variables and must not be committed to the repository.
 
-### Reporting and audit
+## Technology stack
 
-- Browse paginated sales history with product, quantity, price, total, and timestamp details.
-- View an owner-only live summary containing today's revenue, potential profit, stock-outs, fast-selling products, top-earning products, and a seven-day revenue chart.
-- Compare historical daily stock counts over a selected date range.
-- Review audited physical-count logs from the last 30 days or a selected range.
-- Compare live and audited quantities to identify inventory discrepancies.
-- Merge a verified variance into inventory with a required reason.
-
-## Technology
-
-- **Backend:** Python and Flask
-- **Database and ORM:** SQLAlchemy with Flask-Migrate/Alembic
+- **Runtime:** Python, Flask, Gunicorn
+- **Persistence:** PostgreSQL on Neon, SQLAlchemy, Flask-SQLAlchemy
+- **Schema management:** Flask-Migrate and Alembic
 - **Authentication:** Flask-Login and Werkzeug password hashing
-- **Frontend:** Jinja templates, HTML, CSS, JavaScript, and Bootstrap
-- **Charts:** Chart.js assets used by the summary views
-- **Documents:** ReportLab PDF stock-sheet generation
-- **Production hosting:** Render
-- **Application server:** A WSGI server such as Gunicorn can serve `entryPoint:app`
+- **Presentation:** Jinja, HTML, CSS, JavaScript, and Bootstrap
+- **Document generation:** ReportLab
+- **Hosting:** Render
+- **Testing:** pytest, Flask test client, and isolated SQLite fixtures
 
-## Run locally
+## Local development
 
-### Requirements
+### Prerequisites
 
 - Python 3.8 or newer
-- `pip`
-- Git
+- `pip` and Git
+- A PostgreSQL-compatible `DATABASE_URL` for testing against a shared development database, or use the local SQLite fallback
 
 ### Setup
 
@@ -72,119 +57,91 @@ cd flask-inventory-app
 
 python -m venv venv
 source venv/bin/activate       # Linux/macOS
-# venv\Scripts\activate      # Windows
+# venv\Scripts\activate        # Windows
 
 pip install -r requirements.txt
+pip install pytest
+export SECRET_KEY="replace-with-a-random-secret"
 ```
 
-Configure the application with environment variables. The default database is a local SQLite file named `app.db` in the project root.
+For local development, `DATABASE_URL` may be omitted and the application will use `app.db`. To connect to Neon or another PostgreSQL instance, set the provider's complete connection string:
 
 ```bash
-export SECRET_KEY="replace-with-a-random-secret"
-# Optional: use a managed database instead of local SQLite
-export DATABASE_URL="sqlite:///app.db"
+export DATABASE_URL="postgresql://user:password@host/database?sslmode=require"
 ```
 
-Apply migrations and start the development server:
+Apply the current schema and start the service:
 
 ```bash
 flask db upgrade
 python entryPoint.py
 ```
 
-Open `http://localhost:5000` in a browser.
+The development server listens on `http://localhost:5000`. Sample data can be loaded with `python seed_data.py` when working against an intentionally disposable database.
 
-To load the repository's sample data, run:
+## Tests
 
-```bash
-python seed_data.py
-```
+The repository includes pytest coverage for application routes. Fixtures create and destroy an isolated in-memory SQLite database per test, seed only the records needed by the scenario, and exercise the Flask test client with authentication and shop-session state.
 
-## Render deployment
-
-The live service runs on Render. A typical Render web service configuration is:
-
-- **Build command:** `pip install -r requirements.txt`
-- **Start command:** `gunicorn entryPoint:app`
-- **Environment variables:** set a strong `SECRET_KEY` and a production `DATABASE_URL`.
-
-Run database migrations as part of the deployment process before using schema changes:
+Run the test suite with:
 
 ```bash
-flask db upgrade
+python -m pytest app/main/tests
 ```
 
-For production, use a managed database or persistent storage. A local SQLite file in a web service's ephemeral filesystem should not be treated as durable production data. Render provides HTTPS for the deployed service, so the application no longer requires an EC2 or self-signed-certificate setup.
+Tests do not use the production Neon database. This keeps test execution deterministic and prevents test data from reaching shared environments.
 
-## Main application routes
+## Database migrations
 
-The main blueprint serves the following workflows. Most screens load their data through the accompanying `/api/...` endpoints.
-
-| Route | Purpose | Access |
-| --- | --- | --- |
-| `/` | Select the active shop | Public entry point |
-| `/shop` | Shop product workspace | Authenticated shop users |
-| `/add` | Add-product screen | Owner, manager, employee |
-| `/edit-product` | Edit-product screen | Owner, manager, employee |
-| `/new-stocks` | Receive stock screen | Authenticated shop users |
-| `/take-stock` | Physical stock-take screen | Owner, manager, employee, auditor |
-| `/stock-history` | Live, daily, and audited stock history | Owner, manager |
-| `/pos` | Point-of-sale screen | Owner, manager, employee, auditor |
-| `/sales-history` | Paginated sales history | Owner, manager, auditor |
-| `/summary` | Revenue, stock, sales, and audit summary | Owner |
-| `/print-stock-sheet` | Download a PDF stock sheet | Authenticated shop users |
-| `/logout` | End the current session | Authenticated users |
-
-Important JSON endpoints include:
-
-- `/api/products` and `/api/products/<product_id>` for creating and updating products.
-- `/api/new-stocks` for receiving stock.
-- `/api/take-stock` and `/api/stock-take-products` for physical counts.
-- `/api/pos/products`, `/api/pos/checkout`, and `/api/pos/cashless` for POS operations.
-- `/api/sales-history` for paginated transaction history.
-- `/api/summary/live`, `/api/summary/daily-count`, and `/api/summary/audited` for reporting data.
-- `/api/inventory/discrepancies` and `/api/inventory/merge-variance` for variance review and reconciliation.
-
-## Project structure
-
-```text
-flask-inventory-app/
-├── app/
-│   ├── __init__.py             # Flask app factory and blueprint registration
-│   ├── models.py               # SQLAlchemy models
-│   ├── decorators.py           # Shop, role, and payment access checks
-│   ├── main/                   # Inventory, POS, audit, and reporting workflows
-│   ├── auth/                   # User login and logout
-│   ├── admin/                  # System admin shop and user management
-│   ├── subscription/           # Shop registration and subscription screens
-│   ├── templates/               # Jinja HTML templates
-│   ├── static/                  # CSS, JavaScript, manifest, and service worker assets
-│   └── utils/                   # PDF stock-sheet generation
-├── migrations/                 # Alembic migration history
-├── config.py                   # Environment-backed Flask configuration
-├── entryPoint.py               # WSGI application entry point
-├── requirements.txt            # Python dependencies
-├── seed_data.py                # Optional sample-data loader
-└── README.md
-```
-
-## Database model areas
-
-The data model includes shops and users, products, live inventory, sales and sale items, daily inventory snapshots, physical inventory counts, inventory records, and cashless transactions. Inventory queries are scoped to the active shop, while role and payment decorators protect sensitive screens and APIs.
-
-## Development notes
-
-Apply migrations after changing models:
+When a model changes, generate and review a migration, then apply it to the target environment:
 
 ```bash
 flask db migrate -m "Describe the schema change"
 flask db upgrade
 ```
 
-There is currently no committed test suite in the repository. Before deploying changes, verify the affected workflow locally and check the Render service logs for migration or database errors.
+Commit the generated migration with the model change. In deployment, run `flask db upgrade` before serving code that depends on the new schema.
 
-## License and support
+## Deployment
 
-For questions, bug reports, or feature requests, open an issue in the GitHub repository:
+The live service uses the following Render configuration:
 
-https://github.com/Haroon-Nkopa/flask-inventory-app
+- **Build command:** `pip install -r requirements.txt`
+- **Start command:** `gunicorn entryPoint:app`
+- **Required environment variables:** `SECRET_KEY` and the Neon `DATABASE_URL`
+
+Deployment sequence:
+
+1. Install the pinned Python dependencies.
+2. Apply Alembic migrations with `flask db upgrade`.
+3. Start Gunicorn with `entryPoint:app`.
+4. Inspect Render logs if startup, migration, or database connectivity fails.
+
+Do not rely on a local SQLite file in Render's ephemeral filesystem for durable data.
+
+## Repository layout
+
+```text
+flask-inventory-app/
+├── app/
+│   ├── __init__.py             # Application factory and extension setup
+│   ├── models.py               # SQLAlchemy models and relationships
+│   ├── decorators.py           # Shop, role, and payment authorization
+│   ├── main/                   # Core routes, APIs, helpers, and tests
+│   ├── auth/                   # Authentication routes
+│   ├── admin/                  # Administrative routes
+│   ├── subscription/           # Subscription routes
+│   ├── templates/              # Jinja templates
+│   ├── static/                 # Browser assets and service worker
+│   └── utils/                  # PDF generation utilities
+├── migrations/                 # Alembic migration history
+├── config.py                   # Environment-backed configuration
+├── entryPoint.py               # WSGI entry point and shell context
+├── requirements.txt            # Runtime dependencies
+├── seed_data.py                # Optional development data loader
+└── README.md
+```
+
+## Contributing
+
+Keep changes scoped to the relevant blueprint, model, migration, or frontend module. For persistence changes, include the migration and update the affected tests. Before opening a pull request, run the test suite, review generated migrations, and verify that secrets and production connection strings are not present in the diff.
