@@ -37,13 +37,29 @@
     </div>
 
     <!-- Shop Name Banner -->
-    <div class="shop-banner d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center gap-3">
+    <div class="shop-banner d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center gap-3 mb-4">
         <h3 class="m-0 fs-4 fs-sm-3">🛍️ {{ session.get('shop_name') }}</h3>
         <button id="logoutBtn" 
                 data-url="{{ url_for('main.logout') }}" 
                 class="btn btn-danger w-100 w-sm-auto">
             Logout
         </button>
+    </div>
+
+    <!-- 🔍 INVENTORY DASHBOARD SEARCH BAR -->
+    <div class="mb-4">
+      <div class="input-group">
+        <span class="input-group-text bg-success border-success text-dark">
+          <i class="bi bi-search">🔍</i>
+        </span>
+        <input 
+          type="text" 
+          id="dashboardSearchInput" 
+          class="form-control bg-dark text-white border-secondary" 
+          placeholder="Search products by Name, Category, or ID..."
+          autocomplete="off"
+        >
+      </div>
     </div>
 
     <!-- Responsive Table Container Wrapper -->
@@ -58,19 +74,23 @@
                   <th>Price (R)</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody id="dashboard-product-list">
                 {% for p in products %}
-                <tr>
+                <tr class="product-row" data-id="{{ p.id }}" data-name="{{ p.name|lower }}" data-category="{{ p.category|lower }}">
                   <td>{{ p.id }}</td>
                   <td>{{ p.name }}</td>
                   <td>{{ p.category }}</td>
                   <td>{{ "%.2f"|format(p.price) }}</td>
                 </tr>
                 {% else %}
-                <tr>
+                <tr id="no-products-row">
                   <td colspan="4">No products found.</td>
                 </tr>
                 {% endfor %}
+                <!-- Dynamic fallback row when search returns 0 matches -->
+                <tr id="no-search-results-row" class="d-none">
+                  <td colspan="4">No items match your search criteria.</td>
+                </tr>
               </tbody>
             </table>
         </div>
@@ -146,6 +166,35 @@
         } catch (error) {
             console.error('Network error during logout:', error);
             alert('A network error occurred. Please check your connection.');
+        }
+    });
+
+    // 🔍 REAL-TIME DASHBOARD FILTER LOGIC
+    document.getElementById('dashboardSearchInput').addEventListener('input', function(e) {
+        const query = e.target.value.toLowerCase().trim();
+        const rows = document.querySelectorAll('.product-row');
+        const fallbackRow = document.getElementById('no-search-results-row');
+        let visibleCount = 0;
+
+        rows.forEach(row => {
+            const id = row.getAttribute('data-id') || '';
+            const name = row.getAttribute('data-name') || '';
+            const category = row.getAttribute('data-category') || '';
+
+            // Check if query matches ID, Name, or Category
+            if (id.includes(query) || name.includes(query) || category.includes(query)) {
+                row.classList.remove('d-none');
+                visibleCount++;
+            } else {
+                row.classList.add('d-none');
+            }
+        });
+
+        // Toggle "No items match" row if everything is filtered out
+        if (visibleCount === 0 && fallbackRow) {
+            fallbackRow.classList.remove('d-none');
+        } else if (fallbackRow) {
+            fallbackRow.classList.add('d-none');
         }
     });
 </script>

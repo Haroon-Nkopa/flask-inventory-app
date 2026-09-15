@@ -11,6 +11,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import joinedload
 from collections import defaultdict
 from .helper import  execute_inventory_merge, get_product_discrepancies_timeline
+import traceback
 
 
 
@@ -313,7 +314,8 @@ def get_stock_take_products():
 @shop_required
 def submit_stock_api():
     shop_id = session.get('shop_id')
-    
+
+
     products = Product.query.filter_by(shop_id=shop_id).all()
     today_date = date.today()
     data = request.get_json()
@@ -323,8 +325,7 @@ def submit_stock_api():
 
     # Extract global operational note if provided across the payload root dictionary
     global_notes = data.get('notes', '').strip() or None
-
-    # 1. Check if physical stock was already counted today
+    print("deburg 3")
     existing_record = PhysicalInventoryCount.query.join(Product)\
         .filter(Product.shop_id == shop_id, PhysicalInventoryCount.date == today_date).first()
     
@@ -337,7 +338,7 @@ def submit_stock_api():
 
     for product in products:
         qty_input = int(data.get(str(product.id), 0))
-
+      
         stock_to_save.append((product.id, qty_input))
 
 
@@ -346,25 +347,29 @@ def submit_stock_api():
         for p_id, qty in stock_to_save:
             # Check for individual item level notes, fall back to global audit note input string
             item_note = data.get(f"notes_{p_id}", "").strip() or global_notes
-            
+
+
             new_audit = PhysicalInventoryCount(
                 product_id=p_id, 
                 date=today_date, 
                 counted_quantity=qty,
-                user_id=current_user.username, # Authenticated User Tracking Key
+                user_id=current_user.id, # Authenticated User Tracking Key
                 notes=item_note  # Captured Notes Text Mapping String
             )
+
+
             db.session.add(new_audit)
         
         db.session.commit()
+        print("does it still execute after commiting to d?")
         return jsonify({"message": "Physical stock ledger recorded successfully!"}), 201
 
     except Exception as e:
         db.session.rollback()
+        traceback.print_exc()  # Prints the exact line that broke to your server terminal
         return jsonify({"error": "Failed to save physical count records", "details": str(e)}), 500
 
 ####
-from datetime import datetime, timezone
 
 @main.route('/api/inventory/discrepancies', methods=['GET'])
 @login_required
