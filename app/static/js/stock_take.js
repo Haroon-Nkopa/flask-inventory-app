@@ -10,7 +10,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         
         // Generates item count inputs accompanied by hidden note sub-row drawers
         list.innerHTML = products.map(p => `
-            <tr data-product-id="${p.id}" data-product-name="${p.name|lower}">
+            <tr data-product-id="${p.id}" data-product-name="${p.name.toLowerCase()}">
                 <td class="text-capitalize text-start ps-4 fw-bold">${p.name}</td>
                 <td>
                     <div class="d-flex align-items-center justify-content-center gap-2 mx-auto" style="max-width: 180px;">
@@ -28,10 +28,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             </tr>
         `).join('');
     } catch (e) {
+        console.error("Failed to render product list rows:", e);
         list.innerHTML = '<tr><td colspan="2">Error loading products.</td></tr>';
     }
 
-    // 🔍 REAL-TIME FILTER LOGIC ADDED HERE
+    // 🔍 REAL-TIME FILTER LOGIC
     if (searchInput) {
         searchInput.addEventListener('input', (e) => {
             const query = e.target.value.toLowerCase().trim();
@@ -43,15 +44,11 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const noteRow = document.getElementById(`note-row-${pId}`);
                 
                 if (productName.includes(query)) {
-                    // Match found: restore standard display rules
                     row.classList.remove('d-none');
-                    
-                    // Keep the note row showing only if the user had left it open previously
                     if (noteRow && noteRow.getAttribute('data-explicit-open') === 'true') {
                         noteRow.classList.remove('d-none');
                     }
                 } else {
-                    // No match: suppress structural visibility for both rows
                     row.classList.add('d-none');
                     if (noteRow) {
                         noteRow.classList.add('d-none');
@@ -70,8 +67,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             if (targetNoteRow.classList.contains('d-none')) {
                 targetNoteRow.classList.remove('d-none');
-                targetNoteRow.setAttribute('data-explicit-open', 'true'); // Tracks display preference across searches
-                e.target.textContent = '✕'; // Flip text content indicator to clear/close option
+                targetNoteRow.setAttribute('data-explicit-open', 'true');
+                e.target.textContent = '✕';
                 e.target.classList.replace('btn-outline-secondary', 'btn-danger');
                 targetNoteRow.querySelector('.notes-input').focus();
             } else {
@@ -88,16 +85,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         
         const data = {};
 
-        // Loop manual row instances rather than using automated FormEntries matrix mappings
+        // Loop manual row instances
         const productRows = list.querySelectorAll('tr[data-product-id]');
         productRows.forEach(row => {
             const pId = row.getAttribute('data-product-id');
             const qty = parseInt(row.querySelector('.quantity-input').value) || 0;
             
-            // Map core identification value parameters matching Python dictionary rules
             data[pId] = qty;
 
-            // Extract the associated note input string only if the toggle drawer is currently unhidden
             const noteRow = document.getElementById(`note-row-${pId}`);
             if (noteRow && noteRow.getAttribute('data-explicit-open') === 'true') {
                 const noteVal = noteRow.querySelector('.notes-input').value.trim();
@@ -119,8 +114,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             alert(result.message);
             window.location.href = "/shop";
         } else {
-            // Display main error + any specific problematic products
-            let errorMsg = result.error;
+            let errorMsg = result.error || "An error occurred taking stock.";
             if (result.details) {
                 errorMsg += "\n\n" + result.details.join("\n");
             }
