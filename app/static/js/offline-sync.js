@@ -99,6 +99,7 @@ async function syncOfflineTransactions() {
                     
                     // Session expired during offline interval
                     if (response.status === 401 || (result.error && result.error.includes("shop"))) {
+                        
                         alert("⚠️ Background sync halted due to session expiration. Please refresh and log in again.");
                         break; 
                     }
@@ -127,4 +128,7 @@ document.addEventListener('visibilitychange', () => {
 });
 
 
-setInterval(syncOfflineTransactions, 3000);
+setInterval(syncOfflineTransactions, 300000 );
+
+
+
