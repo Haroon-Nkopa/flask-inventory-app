@@ -21,17 +21,17 @@ jobs:
           python-version: '3.12'
           cache: 'pip' # Optional: automatically caches your pip dependencies
 
-      # 3. Install required software dependencies
+      # 3. Install dependencies
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
+          pip install pytest flask flask-sqlalchemy flask-migrate flask-login blinker
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
       # 4. Run your test suite using pytest
       - name: Run test suite
         env:
-          # Set mock config values so your app factory handles logging tests cleanly
-          MAIL_SERVER: '://example.com'
+          MAIL_SERVER: 'smtp.example.com'
           MAIL_PORT: 587
           MAIL_USERNAME: 'test-user'
           MAIL_PASSWORD: 'test-password'
