@@ -1,7 +1,7 @@
 from flask import Flask, send_from_directory, render_template
 from flask_migrate import Migrate
 from flask_login import LoginManager
-from logging.handlers import RotatingFileHandler
+from logging.handlers import RotatingFileHandler, SMTPHandler
 import logging
 import os
 
@@ -10,6 +10,7 @@ from .main import main as main_blueprint
 from .admin import admin_bp
 from .auth import auth_bp
 from .subscription import subscription
+from .sending_email import send_error_email
 
 migrate = Migrate()
 login_manager = LoginManager()
@@ -20,6 +21,11 @@ def create_app():
 
     # ---------- LOGGING SETUP ----------
     if not app.debug and not app.testing:
+        
+        # send error logs via email
+        send_error_email(app)
+        #-------end sending error logs via email------- 
+
         log_dir = os.path.join(app.root_path, '..', 'logs')
         log_dir = os.path.abspath(log_dir)
 
