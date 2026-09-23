@@ -30,9 +30,10 @@ def test_send_error_email_attaches_resend_handler(mock_app):
         
         # 1. Assert the handler was instantiated with the correct arguments from config
         MockResendHandler.assert_called_once_with(
-            to_email=['admin@example.com'],
+            to_email='admin@example.com',  # FIX: Change from list to plain string
             from_email='onboarding@resend.dev'
         )
+
         
         # 2. Assert the handler log level was constrained strictly to ERROR
         mock_handler_instance.setLevel.assert_called_once_with(logging.ERROR)
