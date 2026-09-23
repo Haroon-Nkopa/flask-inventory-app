@@ -25,16 +25,14 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install pytest flask flask-sqlalchemy flask-migrate flask-login blinker
+          # Added resend to the package list below
+          pip install pytest flask flask-sqlalchemy flask-migrate flask-login blinker resend
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
       # 4. Run your test suite using pytest
       - name: Run test suite
         env:
-          MAIL_SERVER: 'smtp.example.com'
-          MAIL_PORT: 587
-          MAIL_USERNAME: 'test-user'
-          MAIL_PASSWORD: 'test-password'
-          MAIL_USE_TLS: '1'
+          # Swapped out legacy SMTP settings for the required test API key
+          RESEND_API_KEY: 're_mock_test_key_12345'
         run: |
           python -m pytest
