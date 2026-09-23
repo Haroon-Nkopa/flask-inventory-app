@@ -21,11 +21,9 @@ class Config:
     else:
         SQLALCHEMY_ENGINE_OPTIONS = {}
 
-    # email server settings
-    MAIL_SERVER = os.environ.get('MAIL_SERVER')
-    MAIL_PORT = int(os.environ.get('MAIL_PORT') or 25)
-    MAIL_USE_TLS = os.environ.get('MAIL_USE_TLS') is not None
-    MAIL_USERNAME = os.environ.get('MAIL_USERNAME')
-    MAIL_PASSWORD = os.environ.get('MAIL_PASSWORD') 
-    ADMINS = ['rethabilejames26@gmail.com']
     
+    # Email settings using Resend API
+    RESEND_API_KEY = os.environ.get('RESEND_API_KEY')
+    
+    # The email address that receives the crash alerts
+    ADMINS = [os.environ.get('ADMINS', 'rethabilejames26@gmail.com')]  
